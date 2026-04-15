@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="AuthLib.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Hosting.Abstractions" Version="2.3.9" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.5" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.5" />
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.17.0" />
+    </ItemGroup>
+
+    <PropertyGroup>
+	    <PackageId>VladyslavDerhun.AuthLib</PackageId>
+	    <Version>0.1.0-beta</Version>
+	    <Authors>Vladyslav Derhun</Authors>
+	    <Description>Modern authentication library for .NET with JWT, refresh tokens, and role-based auth</Description>
+	    <PackageTags>authentication;jwt;authorization;security;efcore</PackageTags>
+	    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+	    <RepositoryUrl>https://github.com/VladDergun/AuthLib</RepositoryUrl>
+	    <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="..\README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+</Project>

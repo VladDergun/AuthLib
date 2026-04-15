@@ -1,0 +1,455 @@
+﻿using AuthLib.Common.AuthResults;
+using AuthLib.Common.Dtos;
+using AuthLib.Common.Validators;
+using AuthLib.Contexts;
+using AuthLib.Enums;
+using AuthLib.Extensions;
+using AuthLib.Interfaces.Services;
+using AuthLib.Models;
+using AuthLib.Options;
+using AuthLib.Services.IdGenerators;
+using AuthLib.Services.Stores;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using System.Data;
+
+
+namespace AuthLib.Services
+{
+    internal class AuthService<TKey, TUser, TRole>(
+        IAuthSecurityService authSecurityService,
+        AuthDbContext<TKey, TUser, TRole> authDbContext,
+        IOptions<AuthOptions> options,
+        ITokenManagerService tokenManagerService,
+        RoleStore<TKey, TUser, TRole> roleStore,
+        UserStore<TKey, TUser, TRole> userStore,
+        TokenStore<TKey, TUser, TRole> tokenStore) : IAuthService<TUser>
+            where TKey : IEquatable<TKey>
+            where TUser : AuthUser<TKey, TRole>, new()
+            where TRole : AuthRole<TKey>, new()
+    {
+        private readonly AuthDbContext<TKey, TUser, TRole> _authDbContext = authDbContext;
+        private readonly IAuthSecurityService _authSecurityService = authSecurityService;
+        private readonly RoleStore<TKey, TUser, TRole> _roleStore = roleStore;
+        private readonly UserStore<TKey, TUser, TRole> _userStore = userStore;
+        private readonly TokenStore<TKey, TUser, TRole> _tokenStore = tokenStore;
+
+        private readonly ITokenManagerService _tokenManagerService = tokenManagerService;
+
+        private readonly AuthOptions _authOptions = options.Value;
+
+        #region Login
+        public async Task<Result<TokenReadDto>> LoginAsync(string email, string password, CancellationToken ct = default)
+        {
+            email = email.Trim().ToLowerInvariant();
+
+            var validationResult = ValidateEmailAndPassword(email, password);
+            if (!validationResult.IsValid)
+            {
+                return validationResult.Errors.ToArray();
+            }
+
+            var user = await _userStore.Users
+                .Where(u => u.Email == email)
+                .Select(u => new
+                {
+                    u.Id,
+                    u.HashedPassword,
+                    EmailVerified = u.IsEmailVerified
+                })
+                .FirstOrDefaultAsync(ct)
+                .ConfigureAwait(false);
+
+            if (user == null || user.HashedPassword == null)
+            {
+                return ErrorCodes.InvalidCredentials;
+            }
+
+            bool isPasswordValid = _authSecurityService.VerifyPassword(password, user.HashedPassword);
+            if (!isPasswordValid)
+            {
+                return ErrorCodes.InvalidCredentials;
+            }
+
+            if (!user.EmailVerified)
+            {
+                return ErrorCodes.EmailNotVerified;
+            }
+
+            var (token, tokenHash) = _tokenManagerService.GenerateToken();
+
+            _tokenStore.AddRefreshToken(user.Id, tokenHash);
+
+            await _authDbContext.SaveChangesAsync(ct)
+                .ConfigureAwait(false);
+
+            var roles = await _roleStore.GetUserRoleNamesAsync(user.Id, ct)
+                .ConfigureAwait(false);
+
+            string accessToken = _tokenManagerService.GenerateJWTToken(user.Id.ToString()!, email, roles);
+
+            return new TokenReadDto(accessToken, token, TokenType.Refresh, user.Id.ToString());
+        }
+
+        #endregion
+
+        #region Registration
+
+        public async Task<Result<TokenReadDto>> RegisterAsync(string email, string password, CancellationToken ct = default)
+        {
+            return await RegisterAsync(email, password, await _roleStore.GetDefaultAsync(ct), ct);
+        }
+
+        public async Task<Result<TokenReadDto>> RegisterAsync(string email, string password, string roleName, CancellationToken ct = default)
+        {
+            return await RegisterAsync(email, password, await _roleStore.GetByNameAsync(roleName, ct), ct);
+        }
+
+        public async Task<Result<TokenReadDto>> RegisterAsync(TUser user, string password, CancellationToken ct = default)
+        {
+            return await RegisterAsync(user, password, await _roleStore.GetDefaultAsync(ct), ct);
+        }
+
+        public async Task<Result<TokenReadDto>> RegisterAsync(TUser user, string password, string roleName, CancellationToken ct = default)
+        {
+            return await RegisterAsync(user, password, await _roleStore.GetByNameAsync(roleName, ct), ct);
+        }
+
+        private async Task<Result<TokenReadDto>> RegisterAsync(string email, string password, AuthRole<TKey> role, CancellationToken ct = default)
+        {
+            email = email.Trim().ToLowerInvariant();
+
+            var validationResult = ValidateEmailAndPassword(email, password);
+            if (!validationResult.IsValid)
+            {
+                return validationResult.Errors.ToArray();
+            }
+
+            if (await _authDbContext.AuthUsers.AnyAsync(u => u.Email == email, ct)
+                .ConfigureAwait(false))
+            {
+                return ErrorCodes.EmailAlreadyInUse;
+            }
+
+            string passwordHash = _authSecurityService.HashPassword(password);
+
+            (string token, string tokenHash) = _tokenManagerService.GenerateToken();
+
+            var user = new TUser
+            {
+                Id = IdGenerator<TKey>.IsAutoGenerated() ? default! : IdGenerator<TKey>.GenerateId(),
+                Email = email,
+                HashedPassword = passwordHash,
+                IsEmailVerified = !_authOptions.EmailVerificationRequired,
+                UserRoles =
+                [
+                    new() {
+                        RoleId = role.Id
+                    }
+                ]
+            };
+
+            _authDbContext.AuthUsers.Add(user);
+
+            try
+            {
+                await _authDbContext.SaveChangesAsync(ct)
+                    .ConfigureAwait(false);
+            }
+            catch (DbUpdateException)
+            {
+                return ErrorCodes.EmailAlreadyInUse;
+            }
+
+            // Add token after user is saved and has a valid ID
+            if (_authOptions.EmailVerificationRequired)
+            {
+                _tokenStore.AddEmailVerificationToken(user.Id, tokenHash);
+            }
+            else
+            {
+                _tokenStore.AddRefreshToken(user.Id, tokenHash);
+            }
+            
+            await _authDbContext.SaveChangesAsync(ct)
+                .ConfigureAwait(false);
+
+            if (_authOptions.EmailVerificationRequired)
+            {
+                return new TokenReadDto(null, token, TokenType.EmailVerification, user.Id.ToString());
+            }
+
+            string accessToken = _tokenManagerService.GenerateJWTToken(user.Id.ToString() ?? "", user.Email, [role.Name]);
+
+            return new TokenReadDto(accessToken, token, TokenType.Refresh, user.Id.ToString());
+        }
+
+        private async Task<Result<TokenReadDto>> RegisterAsync(TUser user, string password, AuthRole<TKey> role, CancellationToken ct = default)
+        {
+            if (user == null)
+                throw new ArgumentNullException(nameof(user));
+
+            user.Email = user.Email.Trim().ToLowerInvariant();
+
+            var validationResult = ValidateEmailAndPassword(user.Email, password);
+            if (!validationResult.IsValid)
+            {
+                return validationResult.Errors.ToArray();
+            }
+
+            if (await _authDbContext.AuthUsers.AnyAsync(u => u.Email == user.Email, ct)
+                .ConfigureAwait(false))
+            {
+                return ErrorCodes.EmailAlreadyInUse;
+            }
+
+            string passwordHash = _authSecurityService.HashPassword(password);
+
+            (string token, string tokenHash) = _tokenManagerService.GenerateToken();
+
+            user.Id = IdGenerator<TKey>.IsAutoGenerated() ? default! : IdGenerator<TKey>.GenerateId();
+            user.HashedPassword = passwordHash;
+            user.IsEmailVerified = !_authOptions.EmailVerificationRequired;
+            user.UserRoles =
+            [
+                new() {
+                    RoleId = role.Id
+                }
+            ];
+
+            _authDbContext.AuthUsers.Add(user);
+
+            try
+            {
+                await _authDbContext.SaveChangesAsync(ct)
+                    .ConfigureAwait(false);
+            }
+            catch (DbUpdateException)
+            {
+                return ErrorCodes.EmailAlreadyInUse;
+            }
+
+            if (_authOptions.EmailVerificationRequired)
+            {
+                _tokenStore.AddEmailVerificationToken(user.Id, tokenHash);
+            }
+            else
+            {
+                _tokenStore.AddRefreshToken(user.Id, tokenHash);
+            }
+            
+            await _authDbContext.SaveChangesAsync(ct)
+                .ConfigureAwait(false);
+
+            if (_authOptions.EmailVerificationRequired)
+            {
+                return new TokenReadDto(null, token, TokenType.EmailVerification, user.Id.ToString());
+            }
+
+            string accessToken = _tokenManagerService.GenerateJWTToken(user.Id.ToString() ?? "", user.Email, [role.Name]);
+
+            return new TokenReadDto(accessToken, token, TokenType.Refresh, user.Id.ToString());
+        }
+
+        #endregion
+
+
+        public async Task<Result<TokenReadDto>> RefreshAsync(string refreshToken, CancellationToken ct = default)
+        {
+            var hash = _tokenManagerService.HashToken(refreshToken);
+
+            var token = await _tokenStore.GetTokenAsync(hash, ct)
+                .ConfigureAwait(false);
+
+            if (token == null || token.TokenType != TokenType.Refresh)
+                return ErrorCodes.InvalidToken;
+
+            if (token.IsRevoked)
+            {
+                await _tokenStore.RevokeUserTokens(token.UserId, [TokenRevokationOption.All], ct)
+                    .ConfigureAwait(false);
+                return ErrorCodes.InvalidTokenReused;
+            }
+
+            if (token.TokenExpiry < DateTime.UtcNow)
+                return ErrorCodes.TokenExpired;
+
+            token.Revoke();
+
+            var (newToken, newHash) = _tokenManagerService.GenerateToken();
+
+            _tokenStore.AddRefreshToken(token.UserId, newHash);
+
+            await _authDbContext.SaveChangesAsync(ct)
+                .ConfigureAwait(false);
+
+            var roles = await _roleStore.GetUserRoleNamesAsync(token.UserId, ct)
+                .ConfigureAwait(false);
+
+            var email = await _userStore.GetUserEmailAsync(token.UserId, ct)
+                .ConfigureAwait(false);
+
+            var accessToken = _tokenManagerService.GenerateJWTToken(token.UserId.ToString()!, email, roles);
+
+            return new TokenReadDto(accessToken, newToken, TokenType.Refresh, token.UserId.ToString());
+        }
+
+        public async Task<Result> LogoutAsync(string refreshToken, CancellationToken ct = default)
+        {
+            var hash = _tokenManagerService.HashToken(refreshToken);
+
+            var token = await _tokenStore.GetTokenAsync(hash, ct)
+                .ConfigureAwait(false);
+
+            if (token == null)
+                return ErrorCodes.InvalidToken;
+
+            if (token.IsRevoked)
+                return Result.Success();
+
+            token.Revoke();
+
+            await _authDbContext.SaveChangesAsync(ct)
+                .ConfigureAwait(false);
+
+            return Result.Success();
+        }
+
+        public async Task<Result> LogoutAllAsync(string refreshToken, CancellationToken ct = default)
+        {
+            var hash = _tokenManagerService.HashToken(refreshToken);
+
+            var token = await _tokenStore.GetTokenAsync(hash, ct)
+                .ConfigureAwait(false);
+
+            if (token == null)
+                return ErrorCodes.InvalidToken;
+
+            await _tokenStore.RevokeUserTokens(token.UserId, [TokenRevokationOption.Refresh], ct)
+                .ConfigureAwait(false);
+
+            await _authDbContext.SaveChangesAsync(ct)
+                 .ConfigureAwait(false);
+
+            return Result.Success();
+        }
+
+        public async Task<Result<string>> RequestPasswordResetAsync(string email, CancellationToken ct = default)
+        {
+            email = email.Trim().ToLowerInvariant();
+
+            var emailValidation = EmailValidator.Validate(email);
+
+            if (!emailValidation.IsValid)
+                return emailValidation.Errors.ToArray();
+
+            var user = await _authDbContext.AuthUsers
+                .FirstOrDefaultAsync(u => u.Email == email, ct)
+                .ConfigureAwait(false);
+
+            // Don't reveal if user exists (prevent user enumeration)
+            if (user == null)
+            {
+                // Still return success to prevent user enumeration
+                return Result<string>.Success(string.Empty);
+            }
+
+            // Revoke any existing password reset tokens for this user
+            await _tokenStore.RevokeUserTokens(user.Id, [TokenRevokationOption.PasswordReset], ct)
+                .ConfigureAwait(false);
+
+            var (token, tokenHash) = _tokenManagerService.GenerateToken();
+
+            _tokenStore.AddPasswordResetToken(user.Id, tokenHash);
+
+            await _authDbContext.SaveChangesAsync(ct)
+                .ConfigureAwait(false);
+
+            // Return the token - library consumer will send it via email
+            return Result<string>.Success(token);
+        }
+
+        public async Task<Result> ResetPasswordAsync(string token, string newPassword, CancellationToken ct = default)
+        {
+            var passwordValidation = PasswordValidator.Validate(newPassword, _authOptions.PasswordOptions);
+            if (!passwordValidation.IsValid)
+                return passwordValidation.Errors.ToArray();
+
+            var hash = _tokenManagerService.HashToken(token);
+
+            var authToken = await _tokenStore.GetTokenAsync(hash, ct)
+                .ConfigureAwait(false);
+
+            if (authToken == null || authToken.TokenType != TokenType.PasswordReset || authToken.IsRevoked)
+                return ErrorCodes.InvalidToken;
+
+            if (authToken.TokenExpiry < DateTime.UtcNow)
+                return ErrorCodes.TokenExpired;
+
+            //Get user
+            var user = await _userStore.GetByIdAsync(authToken.UserId, ct)
+                .ConfigureAwait(false);
+
+            // Update password
+            user.HashedPassword = _authSecurityService.HashPassword(newPassword);
+
+            // Revoke the password reset token
+            authToken.Revoke();
+
+            // Revoke all password reset tokens for this user
+            // Revoke all refresh tokens (force re-login on all devices)
+            await _tokenStore.RevokeUserTokens(authToken.UserId, [TokenRevokationOption.PasswordReset, TokenRevokationOption.Refresh], ct)
+                .ConfigureAwait(false);
+
+            await _authDbContext.SaveChangesAsync(ct)
+                .ConfigureAwait(false);
+
+            return Result.Success();
+        }
+
+        public async Task<Result> VerifyEmailAsync(string token, CancellationToken ct = default)
+        {
+            var hash = _tokenManagerService.HashToken(token);
+
+            var authToken = await _tokenStore.GetTokenAsync(hash, ct)
+                .ConfigureAwait(false);
+
+            if (authToken == null || authToken.TokenType != TokenType.EmailVerification || authToken.IsRevoked)
+                return ErrorCodes.InvalidToken;
+            if (authToken.TokenExpiry < DateTime.UtcNow)
+                return ErrorCodes.TokenExpired;
+
+            var user = await _userStore.GetByIdAsync(authToken.UserId, ct)
+                .ConfigureAwait(false);
+
+            if (user.IsEmailVerified)
+            {
+                return Result.Success();
+            }
+
+            user.IsEmailVerified = true;
+
+            authToken.Revoke();
+
+            await _tokenStore.RevokeUserTokens(authToken.UserId, [TokenRevokationOption.EmailVerification], ct)
+                .ConfigureAwait(false);
+
+            await _authDbContext.SaveChangesAsync(ct)
+                .ConfigureAwait(false);
+
+            return Result.Success();
+        }
+
+        private ValidationResult ValidateEmailAndPassword(string email, string password)
+        {
+            var emailValidation = EmailValidator.Validate(email);
+            if (!emailValidation.IsValid)
+                return emailValidation;
+            var passwordValidation = PasswordValidator.Validate(password, _authOptions.PasswordOptions);
+            if (!passwordValidation.IsValid)
+                return passwordValidation;
+
+            return ValidationResult.Success();
+        }
+    }
+}

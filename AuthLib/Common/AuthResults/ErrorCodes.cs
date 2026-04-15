@@ -1,0 +1,12 @@
+﻿namespace AuthLib.Common.AuthResults
+{
+    public static class ErrorCodes
+    {
+        public const string EmailAlreadyInUse = "Email is already in use.";
+        public const string InvalidToken = "Invalid token.";
+        public const string InvalidTokenReused = "Token reuse detected.";
+        public const string TokenExpired = "Token expired.";
+        public const string EmailNotVerified = "Email not verified.";
+        public const string InvalidCredentials = "Invalid email or password.";
+    }
+}
