@@ -17,7 +17,7 @@ namespace AuthLib.Contexts
         public AuthDbContext(DbContextOptions options, string? schema = null) : base(options, schema) { }
     }
 
-    public abstract class AuthDbContext<TUser, TKey> : AuthDbContext<TKey, TUser, AuthRole<TKey>>
+    public abstract class AuthDbContext<TKey, TUser> : AuthDbContext<TKey, TUser, AuthRole<TKey>>
         where TUser : AuthUser<TKey, AuthRole<TKey>>
         where TKey : IEquatable<TKey>
     {
