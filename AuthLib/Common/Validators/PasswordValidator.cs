@@ -6,7 +6,7 @@ namespace AuthLib.Common.Validators
     {
         public static ValidationResult Validate(string password, PasswordOptions? options)
         {
-            if(options is null)
+            if (options is null)
                 return ValidationResult.Success();
 
             var errors = new List<string>();

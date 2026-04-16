@@ -1,4 +1,5 @@
 ﻿using AuthLib.Common.AuthResults;
+using AuthLib.Common.Builders;
 using AuthLib.Common.Dtos;
 using AuthLib.Common.Validators;
 using AuthLib.Contexts;
@@ -11,6 +12,7 @@ using AuthLib.Services.IdGenerators;
 using AuthLib.Services.Stores;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using OtpNet;
 using System.Data;
 
 
@@ -55,7 +57,8 @@ namespace AuthLib.Services
                 {
                     u.Id,
                     u.HashedPassword,
-                    EmailVerified = u.IsEmailVerified
+                    EmailVerified = u.IsEmailVerified,
+                    u.IsTwoFactorAuthEnabled
                 })
                 .FirstOrDefaultAsync(ct)
                 .ConfigureAwait(false);
@@ -76,6 +79,20 @@ namespace AuthLib.Services
                 return ErrorCodes.EmailNotVerified;
             }
 
+            if (user.IsTwoFactorAuthEnabled)
+            {
+                await _tokenStore.RevokeUserTokens(user.Id, [TokenRevokationOption.TwoFactorAuth], ct)
+                    .ConfigureAwait(false);
+
+                var (twoFactorToken, twoFactorTokenHash) = _tokenManagerService.GenerateToken();
+                _tokenStore.AddTwoFactorAuthToken(user.Id, twoFactorTokenHash);
+
+                await _authDbContext.SaveChangesAsync(ct)
+                    .ConfigureAwait(false);
+
+                return new TokenReadDto(null, twoFactorToken, TokenType.TwoFactorAuth, user.Id.ToString());
+            }
+
             var (token, tokenHash) = _tokenManagerService.GenerateToken();
 
             _tokenStore.AddRefreshToken(user.Id, tokenHash);
@@ -86,7 +103,7 @@ namespace AuthLib.Services
             var roles = await _roleStore.GetUserRoleNamesAsync(user.Id, ct)
                 .ConfigureAwait(false);
 
-            string accessToken = _tokenManagerService.GenerateJWTToken(user.Id.ToString()!, email, roles);
+            string accessToken = _tokenManagerService.GenerateJWTToken(user.Id.ToString()!, email, roles: roles);
 
             return new TokenReadDto(accessToken, token, TokenType.Refresh, user.Id.ToString());
         }
@@ -170,7 +187,7 @@ namespace AuthLib.Services
             {
                 _tokenStore.AddRefreshToken(user.Id, tokenHash);
             }
-            
+
             await _authDbContext.SaveChangesAsync(ct)
                 .ConfigureAwait(false);
 
@@ -179,7 +196,7 @@ namespace AuthLib.Services
                 return new TokenReadDto(null, token, TokenType.EmailVerification, user.Id.ToString());
             }
 
-            string accessToken = _tokenManagerService.GenerateJWTToken(user.Id.ToString() ?? "", user.Email, [role.Name]);
+            string accessToken = _tokenManagerService.GenerateJWTToken(user.Id.ToString() ?? "", user.Email, roles: [role.Name]);
 
             return new TokenReadDto(accessToken, token, TokenType.Refresh, user.Id.ToString());
         }
@@ -237,7 +254,7 @@ namespace AuthLib.Services
             {
                 _tokenStore.AddRefreshToken(user.Id, tokenHash);
             }
-            
+
             await _authDbContext.SaveChangesAsync(ct)
                 .ConfigureAwait(false);
 
@@ -246,7 +263,7 @@ namespace AuthLib.Services
                 return new TokenReadDto(null, token, TokenType.EmailVerification, user.Id.ToString());
             }
 
-            string accessToken = _tokenManagerService.GenerateJWTToken(user.Id.ToString() ?? "", user.Email, [role.Name]);
+            string accessToken = _tokenManagerService.GenerateJWTToken(user.Id.ToString() ?? "", user.Email, roles: [role.Name]);
 
             return new TokenReadDto(accessToken, token, TokenType.Refresh, user.Id.ToString());
         }
@@ -289,7 +306,7 @@ namespace AuthLib.Services
             var email = await _userStore.GetUserEmailAsync(token.UserId, ct)
                 .ConfigureAwait(false);
 
-            var accessToken = _tokenManagerService.GenerateJWTToken(token.UserId.ToString()!, email, roles);
+            var accessToken = _tokenManagerService.GenerateJWTToken(token.UserId.ToString()!, email, roles: roles);
 
             return new TokenReadDto(accessToken, newToken, TokenType.Refresh, token.UserId.ToString());
         }
@@ -439,6 +456,133 @@ namespace AuthLib.Services
 
             return Result.Success();
         }
+
+        #region Two-Factor Authentication
+
+        public async Task<Result<TwoFactorSetupReadDto>> BeginTwoFactorSetupAsync(TUser user, CancellationToken ct = default)
+        {
+            if (_authOptions.EmailVerificationRequired && !user.IsEmailVerified)
+                return ErrorCodes.EmailNotVerified;
+
+            string key = TokenManagerService.GenerateTwoFactorAuthKey();
+
+            string url = TOTPUrlBuilder.Build(key, _authOptions.TwoFactorAuthOptions!.Issuer, user.Email);
+
+            string jwtToken = _tokenManagerService.GenerateJWTToken(
+                user.Id.ToString()!,
+                user.Email,
+                expires: DateTime.UtcNow.Add(_authOptions.TwoFactorAuthOptions!.SetupTokenLifetime),
+                additionalClaims: new Dictionary<string, string>
+                {
+                    ["type"] = "2fa_setup",
+                    ["secret"] = key
+                });
+
+            return new TwoFactorSetupReadDto(jwtToken, url);
+        }
+
+        public async Task<Result> CompleteTwoFactorSetupAsync(TUser user, string token, string code, CancellationToken ct = default)
+        {
+            var principal = _tokenManagerService.ValidateJWTToken(token);
+
+            if (principal == null || principal.Claims.FirstOrDefault(c => c.Type == "type" && c.Value == "2fa_setup") == null)
+                return ErrorCodes.InvalidToken;
+
+            var secretClaim = principal.Claims.FirstOrDefault(c => c.Type == "secret");
+            if (secretClaim == null)
+                return ErrorCodes.InvalidToken;
+
+            var totp = new Totp(Base32Encoding.ToBytes(secretClaim.Value));
+
+            var isValid = totp.VerifyTotp(code, out _, new VerificationWindow(1, 1));
+
+            if (!isValid)
+                return ErrorCodes.InvalidTwoFactorCode;
+
+            user.TwoFactorAuthSecret = secretClaim.Value;
+            user.IsTwoFactorAuthEnabled = true;
+
+            await _authDbContext.SaveChangesAsync(ct)
+                .ConfigureAwait(false);
+
+            return Result.Success();
+        }
+
+        public async Task<Result<TokenReadDto>> VerifyTwoFactorCodeAsync(string twoFactorToken, string code, CancellationToken ct = default)
+        {
+            var hash = _tokenManagerService.HashToken(twoFactorToken);
+
+            var token = await _tokenStore.GetTokenAsync(hash, ct)
+                .ConfigureAwait(false);
+
+            if (token == null || token.TokenType != TokenType.TwoFactorAuth)
+                return ErrorCodes.InvalidToken;
+
+            if (token.IsRevoked)
+                return ErrorCodes.InvalidToken;
+
+            if (token.TokenExpiry < DateTime.UtcNow)
+                return ErrorCodes.TokenExpired;
+
+            var user = await _userStore.GetByIdAsync(token.UserId, ct)
+                .ConfigureAwait(false);
+
+            if (user == null)
+                return ErrorCodes.UserNotFound;
+
+            if (!user.IsTwoFactorAuthEnabled || string.IsNullOrEmpty(user.TwoFactorAuthSecret))
+                return ErrorCodes.TwoFactorNotEnabled;
+
+            var totp = new Totp(Base32Encoding.ToBytes(user.TwoFactorAuthSecret));
+
+            var isValid = totp.VerifyTotp(code, out _, new VerificationWindow(1, 1));
+
+            if (!isValid)
+                return ErrorCodes.InvalidTwoFactorCode;
+
+            token.Revoke();
+
+            await _tokenStore.RevokeUserTokens(token.UserId, [TokenRevokationOption.TwoFactorAuth], ct)
+                .ConfigureAwait(false);
+
+            var (refreshToken, refreshTokenHash) = _tokenManagerService.GenerateToken();
+
+            _tokenStore.AddRefreshToken(token.UserId, refreshTokenHash);
+
+            await _authDbContext.SaveChangesAsync(ct)
+                .ConfigureAwait(false);
+
+            var roles = await _roleStore.GetUserRoleNamesAsync(token.UserId, ct)
+                .ConfigureAwait(false);
+
+            var email = await _userStore.GetUserEmailAsync(token.UserId, ct)
+                .ConfigureAwait(false);
+
+            var accessToken = _tokenManagerService.GenerateJWTToken(token.UserId.ToString()!, email, roles: roles);
+
+            return new TokenReadDto(accessToken, refreshToken, TokenType.Refresh, token.UserId.ToString());
+        }
+
+        public async Task<Result> DisableTwoFactorAuthAsync(TUser user, string password, CancellationToken ct = default)
+        {
+            if (!user.IsTwoFactorAuthEnabled)
+                return ErrorCodes.TwoFactorNotEnabled;
+
+            bool isPasswordValid = _authSecurityService.VerifyPassword(password, user.HashedPassword!);
+            if (!isPasswordValid)
+                return ErrorCodes.InvalidCredentials;
+
+            user.IsTwoFactorAuthEnabled = false;
+            user.TwoFactorAuthSecret = null;
+
+            await _authDbContext.SaveChangesAsync(ct)
+                .ConfigureAwait(false);
+
+            return Result.Success();
+        }
+
+        #endregion
+
 
         private ValidationResult ValidateEmailAndPassword(string email, string password)
         {

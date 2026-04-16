@@ -6,10 +6,13 @@ using AuthLib.Options;
 using AuthLib.Services;
 using AuthLib.Services.Hosted;
 using AuthLib.Services.Stores;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 
 namespace AuthLib.DependencyInjection
@@ -29,6 +32,7 @@ namespace AuthLib.DependencyInjection
                 opts.PasswordOptions = options.PasswordOptions;
                 opts.TokenCleanupOptions = options.TokenCleanupOptions;
                 opts.EmailVerificationRequired = options.EmailVerificationRequired;
+                opts.TwoFactorAuthOptions = options.TwoFactorAuthOptions;
             });
 
             services.AddScoped<IAuthSecurityService, AuthSecurityService>();
@@ -77,8 +81,13 @@ namespace AuthLib.DependencyInjection
             authDependencyBuilder.Services.TryAddScoped(typeof(RoleStore<,,>)
                 .MakeGenericType(keyType, userType, roleType));
 
-            authDependencyBuilder.Services.TryAddScoped(typeof(UserStore<,,>)
-                .MakeGenericType(keyType, userType, roleType));
+            var userStoreType = typeof(UserStore<,,>)
+                .MakeGenericType(keyType, userType, roleType);
+
+            authDependencyBuilder.Services.TryAddScoped(userStoreType);
+            authDependencyBuilder.Services.TryAddScoped(
+                typeof(IUserStore<>).MakeGenericType(userType),
+                sp => sp.GetRequiredService(userStoreType));
 
             authDependencyBuilder.Services.TryAddScoped(typeof(TokenStore<,,>)
                 .MakeGenericType(keyType, userType, roleType));
@@ -103,6 +112,36 @@ namespace AuthLib.DependencyInjection
                 authDependencyBuilder.Services.AddSingleton(sp =>
                     (IHostedService)sp.GetRequiredService(cleanupServiceType));
             }
+
+            return authDependencyBuilder;
+        }
+
+        public static AuthDependencyBuilder AddJwtAuthentication(this AuthDependencyBuilder authDependencyBuilder)
+        {
+            var jwtOptions = authDependencyBuilder.Options.JWTOptions;
+
+            authDependencyBuilder.Services
+                .AddAuthentication(options =>
+                {
+                    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                })
+                .AddJwtBearer(options =>
+                {
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuer = true,
+                        ValidateAudience = true,
+                        ValidateLifetime = true,
+                        ValidateIssuerSigningKey = true,
+                        ValidIssuer = jwtOptions.Issuer,
+                        ValidAudience = jwtOptions.Audience,
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
+                        ClockSkew = TimeSpan.Zero
+                    };
+                });
+
+            authDependencyBuilder.Services.AddAuthorization();
 
             return authDependencyBuilder;
         }

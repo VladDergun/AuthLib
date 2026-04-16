@@ -35,6 +35,10 @@ namespace AuthLib.Options
         /// Configuration for automatic cleanup of expired tokens from the database.
         /// </summary>
         public TokenCleanupOptions? TokenCleanupOptions { get; set; }
+        /// <summary>
+        /// Configuration options for two-factor authentication (2FA), including issuer information for 2FA token generation.
+        /// </summary>
+        public TwoFactorAuthOptions? TwoFactorAuthOptions { get; set; }
     }
 
     /// <summary>
@@ -143,5 +147,12 @@ namespace AuthLib.Options
         /// The period for which expired tokens are retained before being deleted. Default is 30 days.
         /// </summary>
         public TimeSpan RetentionPeriod { get; set; } = TimeSpan.FromDays(30);
+    }
+
+    public sealed class TwoFactorAuthOptions
+    {
+        public required string Issuer { get; set; }
+        public TimeSpan SetupTokenLifetime { get; set; } = TimeSpan.FromMinutes(5);
+        public TimeSpan TwoFactorTokenLifetime { get; set; } = TimeSpan.FromMinutes(5);
     }
 }

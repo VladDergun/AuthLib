@@ -11,15 +11,17 @@
 
     <ItemGroup>
         <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
         <PackageReference Include="Microsoft.AspNetCore.Hosting.Abstractions" Version="2.3.9" />
         <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.5" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.5" />
+        <PackageReference Include="Otp.NET" Version="1.4.0" />
         <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.17.0" />
     </ItemGroup>
 
     <PropertyGroup>
 	    <PackageId>VladyslavDerhun.AuthLib</PackageId>
-	    <Version>0.1.1-beta</Version>
+	    <Version>0.1.3-beta</Version>
 	    <Authors>Vladyslav Derhun</Authors>
 	    <Description>Modern authentication library for .NET with JWT, refresh tokens, and role-based auth</Description>
 	    <PackageTags>authentication;jwt;authorization;security;efcore</PackageTags>

@@ -8,6 +8,8 @@ A modern, flexible authentication library for .NET 10.0 with JWT tokens, refresh
 ## Features
 
 - **JWT Authentication** - Secure token-based authentication with access and refresh tokens
+- **ASP.NET Core Integration** - Built-in support for `[Authorize]` attribute and JWT middleware
+- **Two-Factor Authentication (2FA)** - TOTP-based 2FA with QR code generation
 - **Token Rotation** - Automatic refresh token rotation for enhanced security
 - **Role-Based Authorization** - Flexible role management with default role assignment
 - **Email Verification** - Optional email verification workflow
@@ -112,14 +114,17 @@ builder.Services.AddAuthServices(new AuthOptions
         CleanupInterval = TimeSpan.FromHours(24),
         RetentionPeriod = TimeSpan.FromDays(30)
     }
-}).AddEntityFrameworkStores<AppDbContext>();
+})
+.AddEntityFrameworkStores<AppDbContext>()
+.AddJwtAuthentication(); // Enable JWT authentication for [Authorize] attribute
 
 var app = builder.Build();
-```
 
-### 4. Use in Your Controllers
+// Add authentication & authorization middleware
+app.UseAuthentication();
+app.UseAuthorization();
 
-```csharp
+// Rest of the code remains the same
 using AuthLib.Interfaces.Services;
 using AuthLib.Common.Dtos;
 using Microsoft.AspNetCore.Mvc;
@@ -179,7 +184,35 @@ public class AuthController : ControllerBase
         return Ok();
     }
 }
-```
+
+### 5. Protect Endpoints with [Authorize]
+
+```csharp
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+[ApiController]
+[Route("api/[controller]")]
+public class ProfileController : ControllerBase
+{
+    [HttpGet]
+    [Authorize] // Requires valid JWT token
+    public IActionResult GetProfile()
+    {
+        var userId = User.FindFirst("sub")?.Value; // Get user ID from token
+        var email = User.FindFirst("email")?.Value; // Get email from token
+        var roles = User.FindAll("role").Select(c => c.Value); // Get roles from token
+        
+        return Ok(new { userId, email, roles });
+    }
+    
+    [HttpGet("admin")]
+    [Authorize(Roles = "Admin")] // Requires Admin role
+    public IActionResult AdminOnly()
+    {
+        return Ok("Admin access granted");
+    }
+}
 
 ## API Reference
 

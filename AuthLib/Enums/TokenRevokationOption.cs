@@ -6,5 +6,6 @@
         Refresh,
         PasswordReset,
         EmailVerification,
+        TwoFactorAuth,
     }
 }
