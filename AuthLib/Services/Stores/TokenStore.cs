@@ -1,6 +1,5 @@
 ﻿using AuthLib.Contexts;
 using AuthLib.Enums;
-using AuthLib.Interfaces;
 using AuthLib.Models;
 using AuthLib.Options;
 using Microsoft.EntityFrameworkCore;
@@ -62,6 +61,18 @@ namespace AuthLib.Services.Stores
             });
         }
 
+        public void AddTwoFactorAuthToken(TKey userId, string tokenHash)
+        {
+            Tokens.Add(new AuthToken<TKey>
+            {
+                UserId = userId,
+                TokenHash = tokenHash,
+                IsRevoked = false,
+                TokenType = TokenType.TwoFactorAuth,
+                TokenExpiry = DateTime.UtcNow.Add(_options.TwoFactorAuthOptions!.TwoFactorTokenLifetime)
+            });
+        }
+
         public async Task RevokeUserTokens(TKey userId, ImmutableHashSet<TokenRevokationOption> tokenRevocationOptions, CancellationToken ct = default)
         {
             var query = Tokens
@@ -79,6 +90,9 @@ namespace AuthLib.Services.Stores
 
                 if (tokenRevocationOptions.Contains(TokenRevokationOption.EmailVerification))
                     typesToRevoke.Add(TokenType.EmailVerification);
+
+                if (tokenRevocationOptions.Contains(TokenRevokationOption.TwoFactorAuth))
+                    typesToRevoke.Add(TokenType.TwoFactorAuth);
 
                 if (typesToRevoke.Count > 0)
                 {

@@ -1,5 +1,4 @@
-﻿using AuthLib.Models;
-using AuthLib.Models.Join;
+﻿using AuthLib.Models.Join;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

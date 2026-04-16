@@ -70,7 +70,7 @@ namespace AuthLib.Tests.Services
             var roles = new[] { "User", "Admin" };
 
             // Act
-            var token = _tokenManagerService.GenerateJWTToken(userId, email, roles);
+            var token = _tokenManagerService.GenerateJWTToken(userId, email, roles: roles);
 
             // Assert
             token.Should().NotBeNullOrEmpty();
@@ -84,8 +84,8 @@ namespace AuthLib.Tests.Services
             var roles = new[] { "User" };
 
             // Act
-            var token1 = _tokenManagerService.GenerateJWTToken("1", "user1@example.com", roles);
-            var token2 = _tokenManagerService.GenerateJWTToken("2", "user2@example.com", roles);
+            var token1 = _tokenManagerService.GenerateJWTToken("1", "user1@example.com", roles: roles);
+            var token2 = _tokenManagerService.GenerateJWTToken("2", "user2@example.com", roles: roles);
 
             // Assert
             token1.Should().NotBe(token2);
@@ -100,7 +100,7 @@ namespace AuthLib.Tests.Services
             var roles = Array.Empty<string>();
 
             // Act
-            var token = _tokenManagerService.GenerateJWTToken(userId, email, roles);
+            var token = _tokenManagerService.GenerateJWTToken(userId, email, roles: roles);
 
             // Assert
             token.Should().NotBeNullOrEmpty();
@@ -116,7 +116,7 @@ namespace AuthLib.Tests.Services
             var roles = new[] { "User", "Admin", "Moderator" };
 
             // Act
-            var token = _tokenManagerService.GenerateJWTToken(userId, email, roles);
+            var token = _tokenManagerService.GenerateJWTToken(userId, email, roles: roles);
 
             // Assert
             token.Should().NotBeNullOrEmpty();

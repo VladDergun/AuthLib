@@ -34,6 +34,8 @@ namespace AuthLib.Models
         public string? HashedPassword { get; set; }
         public bool IsAutoOAuthBindingEnabled { get; set; }
         public bool IsEmailVerified { get; set; }
+        public bool IsTwoFactorAuthEnabled { get; set; } = false;
+        public string? TwoFactorAuthSecret { get; set; }
 
         [ConcurrencyCheck]
         public string ConcurrencyStamp { get; set; } = Guid.NewGuid().ToString();

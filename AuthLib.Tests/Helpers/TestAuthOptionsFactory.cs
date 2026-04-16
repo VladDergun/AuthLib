@@ -5,7 +5,9 @@ namespace AuthLib.Tests.Helpers
 {
     public static class TestAuthOptionsFactory
     {
-        public static IOptions<AuthOptions> Create(bool emailVerificationRequired = false)
+        public static IOptions<AuthOptions> Create(
+            bool emailVerificationRequired = false,
+            TwoFactorAuthOptions? twoFactorAuthOptions = null)
         {
             var options = new AuthOptions
             {
@@ -40,7 +42,8 @@ namespace AuthLib.Tests.Helpers
                 TokenCleanupOptions = new TokenCleanupOptions
                 {
                     Enabled = false
-                }
+                },
+                TwoFactorAuthOptions = twoFactorAuthOptions
             };
 
             return Microsoft.Extensions.Options.Options.Create(options);

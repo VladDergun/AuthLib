@@ -1,6 +1,5 @@
 ﻿using AuthLib.Common.AuthResults;
 using AuthLib.Common.Dtos;
-using AuthLib.Models;
 
 namespace AuthLib.Interfaces.Services
 {
@@ -89,6 +88,19 @@ namespace AuthLib.Interfaces.Services
         /// After successful verification, all email verification tokens for the user are revoked.
         /// </remarks>
         Task<Result> VerifyEmailAsync(string token, CancellationToken ct = default);
+
+        /// <summary>
+        /// Verifies a two-factor authentication code and completes the login process
+        /// </summary>
+        /// <param name="twoFactorToken">Two-factor authentication token from login</param>
+        /// <param name="code">Six-digit 2FA code from authenticator app</param>
+        /// <param name="ct">Cancellation Token</param>
+        /// <returns>Access token and refresh token if successful</returns>
+        /// <remarks>
+        /// This method should be called after LoginAsync returns a TwoFactorAuth token type.
+        /// After successful verification, all 2FA tokens for the user are revoked.
+        /// </remarks>
+        Task<Result<TokenReadDto>> VerifyTwoFactorCodeAsync(string twoFactorToken, string code, CancellationToken ct = default);
     }
 
     public interface IAuthService<TUser> : IAuthService
@@ -111,5 +123,39 @@ namespace AuthLib.Interfaces.Services
         /// <param name="ct">Cancellation Token</param>
         /// <returns></returns>
         Task<Result<TokenReadDto>> RegisterAsync(TUser user, string password, string roleName, CancellationToken ct = default);
+
+        /// <summary>
+        /// Begins the two-factor authentication setup process for a user
+        /// </summary>
+        /// <param name="userId">User ID</param>
+        /// <param name="ct">Cancellation Token</param>
+        /// <returns>Setup token and QR code URL for authenticator app configuration</returns>
+        /// <remarks>
+        /// The returned setup token must be passed to CompleteTwoFactorSetupAsync along with a verification code.
+        /// The QR code URL can be displayed to the user for scanning with an authenticator app.
+        /// </remarks>
+        Task<Result<TwoFactorSetupReadDto>> BeginTwoFactorSetupAsync(TUser user, CancellationToken ct = default);
+
+        /// <summary>
+        /// Completes the two-factor authentication setup by verifying the code
+        /// </summary>
+        /// <param name="userId">User ID</param>
+        /// <param name="token">Setup token from BeginTwoFactorSetupAsync</param>
+        /// <param name="code">Six-digit verification code from authenticator app</param>
+        /// <param name="ct">Cancellation Token</param>
+        /// <returns>Success if 2FA is enabled, error codes otherwise</returns>
+        Task<Result> CompleteTwoFactorSetupAsync(TUser user, string token, string code, CancellationToken ct = default);
+
+        /// <summary>
+        /// Disables two-factor authentication for a user
+        /// </summary>
+        /// <param name="userId">User ID</param>
+        /// <param name="password">User's password for verification</param>
+        /// <param name="ct">Cancellation Token</param>
+        /// <returns>Success if 2FA is disabled, error codes otherwise</returns>
+        /// <remarks>
+        /// Requires password verification for security. Removes the 2FA secret from the user account.
+        /// </remarks>
+        Task<Result> DisableTwoFactorAuthAsync(TUser user, string password, CancellationToken ct = default);
     }
 }

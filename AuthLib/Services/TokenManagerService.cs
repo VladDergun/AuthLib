@@ -2,6 +2,7 @@
 using AuthLib.Options;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using OtpNet;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -16,7 +17,7 @@ namespace AuthLib.Services
         private readonly AuthOptions _authOptions = authOptions.Value;
         private readonly IAuthSecurityService _authSecurityService = authSecurityService;
 
-        public string GenerateJWTToken(string userId, string email, IReadOnlyList<string> roles)
+        public string GenerateJWTToken(string userId, string email, DateTime? expires = null, IReadOnlyList<string>? roles = null, IReadOnlyDictionary<string, string>? additionalClaims = null)
         {
             var jwtOptions = _authOptions.JWTOptions;
 
@@ -26,6 +27,14 @@ namespace AuthLib.Services
                 new Claim(JwtRegisteredClaimNames.Email, email),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
+
+            if (additionalClaims != null)
+            {
+                foreach (var claim in additionalClaims)
+                {
+                    claims.Add(new Claim(claim.Key, claim.Value));
+                }
+            }
 
             if (roles != null)
             {
@@ -40,8 +49,7 @@ namespace AuthLib.Services
 
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            var expires = DateTime.UtcNow.Add(jwtOptions.AccessTokenLifetime);
-
+            expires ??= DateTime.UtcNow.Add(jwtOptions.AccessTokenLifetime);
 
             var token = new JwtSecurityToken(
                 issuer: jwtOptions.Issuer,
@@ -52,6 +60,31 @@ namespace AuthLib.Services
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        public ClaimsPrincipal? ValidateJWTToken(string token)
+        {
+            var jwtOptions = _authOptions.JWTOptions;
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.UTF8.GetBytes(jwtOptions.SigningKey);
+            try
+            {
+                var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = jwtOptions.Issuer,
+                    ValidateAudience = true,
+                    ValidAudience = jwtOptions.Audience,
+                    ValidateLifetime = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ValidateIssuerSigningKey = true,
+                }, out SecurityToken validatedToken);
+                return principal;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public (string Token, string TokenHash) GenerateToken()
@@ -66,6 +99,13 @@ namespace AuthLib.Services
             var hash = _authSecurityService.HashToken(token);
 
             return (token, hash);
+        }
+
+        public static string GenerateTwoFactorAuthKey()
+        {
+            var key = KeyGeneration.GenerateRandomKey(20);
+
+            return Base32Encoding.ToString(key);
         }
 
         public string HashToken(string token)
