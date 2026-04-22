@@ -2,7 +2,7 @@ using AuthLib.Interfaces.Services;
 using AuthLib.Options;
 using AuthLib.Services;
 using AuthLib.Tests.Helpers;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Options;
 
 namespace AuthLib.Tests.Services

@@ -6,7 +6,7 @@ using AuthLib.Options;
 using AuthLib.Services;
 using AuthLib.Services.Stores;
 using AuthLib.Tests.Helpers;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
