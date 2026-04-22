@@ -1,4 +1,3 @@
-using AuthLib.Interfaces.Services;
 using AuthLib.Options;
 using AuthLib.Services;
 using AuthLib.Tests.Helpers;
@@ -9,7 +8,7 @@ namespace AuthLib.Tests.Services
 {
     public class AuthSecurityServiceTests
     {
-        private readonly IAuthSecurityService _authSecurityService;
+        private readonly AuthSecurityService _authSecurityService;
         private readonly IOptions<AuthOptions> _authOptions;
 
         public AuthSecurityServiceTests()

@@ -20,16 +20,14 @@ namespace AuthLib.Tests.Services
             _fixture = fixture;
         }
 
-        public async Task InitializeAsync()
+        public async ValueTask InitializeAsync()
         {
             _dbContext = TestDbContextFactory.CreateContext(_fixture.ConnectionString);
             _roleStore = new RoleStore<int, TestUser, AuthRole<int>>(_dbContext);
             _roleManagerService = new RoleSeederService<int, TestUser, AuthRole<int>>(_roleStore);
-
-            await Task.CompletedTask;
         }
 
-        public async Task DisposeAsync()
+        public async ValueTask DisposeAsync()
         {
             await _dbContext.Database.EnsureDeletedAsync();
             await _dbContext.DisposeAsync();
@@ -51,7 +49,7 @@ namespace AuthLib.Tests.Services
             await _roleManagerService.SeedRolesAsync(roles, CancellationToken.None);
 
             // Assert
-            var dbRoles = await _dbContext.AuthRoles.ToListAsync();
+            var dbRoles = await _dbContext.AuthRoles.ToListAsync(TestContext.Current.CancellationToken);
             dbRoles.Should().HaveCount(2);
             dbRoles.Should().Contain(r => r.Name == "User");
             dbRoles.Should().Contain(r => r.Name == "Admin");
@@ -68,10 +66,10 @@ namespace AuthLib.Tests.Services
             };
 
             // Act
-            await _roleManagerService.SeedRolesAsync(roles, CancellationToken.None);
+            await _roleManagerService.SeedRolesAsync(roles, TestContext.Current.CancellationToken);
 
             // Assert
-            var defaultRole = await _dbContext.AuthRoles.FirstOrDefaultAsync(r => r.IsDefault);
+            var defaultRole = await _dbContext.AuthRoles.FirstOrDefaultAsync(r => r.IsDefault, TestContext.Current.CancellationToken);
             defaultRole.Should().NotBeNull();
             defaultRole!.Name.Should().Be("User");
         }
@@ -86,11 +84,11 @@ namespace AuthLib.Tests.Services
             };
 
             // Act - Seed twice
-            await _roleManagerService.SeedRolesAsync(roles, CancellationToken.None);
-            await _roleManagerService.SeedRolesAsync(roles, CancellationToken.None);
+            await _roleManagerService.SeedRolesAsync(roles, TestContext.Current.CancellationToken);
+            await _roleManagerService.SeedRolesAsync(roles, TestContext.Current.CancellationToken);
 
             // Assert
-            var dbRoles = await _dbContext.AuthRoles.ToListAsync();
+            var dbRoles = await _dbContext.AuthRoles.ToListAsync(TestContext.Current.CancellationToken);
             dbRoles.Should().HaveCount(1);
         }
 
@@ -105,7 +103,7 @@ namespace AuthLib.Tests.Services
                 new() { Name = "Moderator", IsDefault = false }
             };
 
-            await _roleManagerService.SeedRolesAsync(initialRoles, CancellationToken.None);
+            await _roleManagerService.SeedRolesAsync(initialRoles, TestContext.Current.CancellationToken);
 
             var updatedRoles = new List<Role>
             {
@@ -114,10 +112,10 @@ namespace AuthLib.Tests.Services
             };
 
             // Act
-            await _roleManagerService.SeedRolesAsync(updatedRoles, CancellationToken.None);
+            await _roleManagerService.SeedRolesAsync(updatedRoles, TestContext.Current.CancellationToken);
 
             // Assert
-            var moderatorRole = await _dbContext.AuthRoles.FirstOrDefaultAsync(r => r.Name == "Moderator");
+            var moderatorRole = await _dbContext.AuthRoles.FirstOrDefaultAsync(r => r.Name == "Moderator", TestContext.Current.CancellationToken);
             moderatorRole.Should().NotBeNull();
             moderatorRole!.IsActive.Should().BeFalse();
         }
@@ -132,7 +130,7 @@ namespace AuthLib.Tests.Services
                 new() { Name = "Admin", IsDefault = false }
             };
 
-            await _roleManagerService.SeedRolesAsync(initialRoles, CancellationToken.None);
+            await _roleManagerService.SeedRolesAsync(initialRoles, TestContext.Current.CancellationToken);
 
             var updatedRoles = new List<Role>
             {
@@ -141,11 +139,11 @@ namespace AuthLib.Tests.Services
             };
 
             // Act
-            await _roleManagerService.SeedRolesAsync(updatedRoles, CancellationToken.None);
+            await _roleManagerService.SeedRolesAsync(updatedRoles, TestContext.Current.CancellationToken);
 
             // Assert
-            var userRole = await _dbContext.AuthRoles.FirstAsync(r => r.Name == "User");
-            var adminRole = await _dbContext.AuthRoles.FirstAsync(r => r.Name == "Admin");
+            var userRole = await _dbContext.AuthRoles.FirstAsync(r => r.Name == "User", TestContext.Current.CancellationToken);
+            var adminRole = await _dbContext.AuthRoles.FirstAsync(r => r.Name == "Admin", TestContext.Current.CancellationToken);
 
             userRole.IsDefault.Should().BeFalse();
             adminRole.IsDefault.Should().BeTrue();
@@ -163,10 +161,10 @@ namespace AuthLib.Tests.Services
             };
 
             // Act
-            await _roleManagerService.SeedRolesAsync(roles, CancellationToken.None);
+            await _roleManagerService.SeedRolesAsync(roles, TestContext.Current.CancellationToken);
 
             // Assert
-            var defaultRoles = await _dbContext.AuthRoles.Where(r => r.IsDefault).ToListAsync();
+            var defaultRoles = await _dbContext.AuthRoles.Where(r => r.IsDefault).ToListAsync(TestContext.Current.CancellationToken);
             defaultRoles.Should().HaveCount(1);
         }
 
@@ -184,11 +182,11 @@ namespace AuthLib.Tests.Services
                 new() { Name = "Admin", IsDefault = false }
             };
 
-            await _roleManagerService.SeedRolesAsync(roles, CancellationToken.None);
+            await _roleManagerService.SeedRolesAsync(roles, TestContext.Current.CancellationToken);
 
             // Act
-            var defaultRole = await _roleStore.GetDefaultAsync(CancellationToken.None);
-            var adminRole = await _roleStore.GetByNameAsync("Admin", CancellationToken.None);
+            var defaultRole = await _roleStore.GetDefaultAsync(TestContext.Current.CancellationToken);
+            var adminRole = await _roleStore.GetByNameAsync("Admin", TestContext.Current.CancellationToken);
 
             // Assert
             defaultRole.Should().NotBeNull();
@@ -206,10 +204,10 @@ namespace AuthLib.Tests.Services
                 new() { Name = "User", IsDefault = true }
             };
 
-            await _roleManagerService.SeedRolesAsync(roles, CancellationToken.None);
+            await _roleManagerService.SeedRolesAsync(roles, TestContext.Current.CancellationToken);
 
             // Act
-            var role = await _roleStore.GetByNameAsync("user", CancellationToken.None);
+            var role = await _roleStore.GetByNameAsync("user", TestContext.Current.CancellationToken);
 
             // Assert
             role.Should().NotBeNull();

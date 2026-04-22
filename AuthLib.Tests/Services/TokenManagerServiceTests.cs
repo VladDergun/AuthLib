@@ -9,7 +9,7 @@ namespace AuthLib.Tests.Services
 {
     public class TokenManagerServiceTests
     {
-        private readonly ITokenManagerService _tokenManagerService;
+        private readonly TokenManagerService _tokenManagerService;
         private readonly IAuthSecurityService _authSecurityService;
         private readonly IOptions<AuthOptions> _authOptions;
 
