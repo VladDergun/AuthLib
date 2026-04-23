@@ -254,15 +254,21 @@ Extended interface for custom user models.
 | `JWTOptions` | `JWTOptions` | Yes | JWT configuration |
 | `PasswordOptions` | `PasswordOptions` | No | Password validation rules |
 | `TokenCleanupOptions` | `TokenCleanupOptions` | No | Token cleanup configuration |
+| `TwoFactorAuthOptions` | `TwoFactorAuthOptions` | No | Two-factor authentication configuration |
 
 ### JWTOptions
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Issuer` | `string` | Required | JWT issuer claim |
+| `ValidateIssuer` | `bool` | true | Validate the `iss` claim against `Issuer` |
 | `Audience` | `string` | Required | JWT audience claim |
+| `ValidateAudience` | `bool` | true | Validate the `aud` claim against `Audience` |
 | `SigningKey` | `string` | Required | Key for signing tokens |
+| `ValidateIssuerSigningKey` | `bool` | true | Validate the token signing key |
 | `AccessTokenLifetime` | `TimeSpan` | 15 minutes | Access token expiration |
+| `ValidateLifetime` | `bool` | true | Validate token lifetime (`exp`/`nbf`) |
+| `ClockSkew` | `TimeSpan` | 5 minutes | Clock drift tolerance for lifetime validation |
 | `RefreshTokenLifetime` | `TimeSpan` | 7 days | Refresh token expiration |
 | `EmailVerificationTokenLifetime` | `TimeSpan` | 1 day | Email verification token expiration |
 | `PasswordResetTokenLifetime` | `TimeSpan` | 30 minutes | Password reset token expiration |
@@ -287,6 +293,14 @@ Extended interface for custom user models.
 | `Enabled` | `bool` | true | Enable automatic cleanup |
 | `CleanupInterval` | `TimeSpan` | 24 hours | Cleanup frequency |
 | `RetentionPeriod` | `TimeSpan` | 30 days | How long to keep expired tokens |
+
+### TwoFactorAuthOptions
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Issuer` | `string` | Required | Issuer shown in authenticator apps (TOTP label) |
+| `SetupTokenLifetime` | `TimeSpan` | 5 minutes | Lifetime of the 2FA setup token |
+| `TwoFactorTokenLifetime` | `TimeSpan` | 5 minutes | Lifetime of the 2FA challenge token |
 
 ## Advanced Usage
 

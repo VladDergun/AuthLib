@@ -9,7 +9,7 @@ using System.Collections.Immutable;
 
 namespace AuthLib.Services.Stores
 {
-    public class TokenStore<TKey, TUser, TRole>(
+    internal class TokenStore<TKey, TUser, TRole>(
         AuthDbContext<TKey, TUser, TRole> authDbContext,
         IOptions<AuthOptions> options) : BaseStore<TKey, TUser, TRole>(authDbContext)
         where TKey : IEquatable<TKey>
@@ -22,7 +22,8 @@ namespace AuthLib.Services.Stores
 
         public async Task<AuthToken<TKey>?> GetTokenAsync(string tokenHash, CancellationToken ct = default)
         {
-            return await Tokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct).ConfigureAwait(false);
+            return await Tokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct)
+                .ConfigureAwait(false);
         }
 
         public void AddRefreshToken(TKey userId, string tokenHash)
@@ -100,7 +101,8 @@ namespace AuthLib.Services.Stores
                 }
             }
 
-            var tokens = await query.ToListAsync(ct).ConfigureAwait(false);
+            var tokens = await query.ToListAsync(ct)
+                .ConfigureAwait(false);
 
             foreach (var token in tokens)
             {

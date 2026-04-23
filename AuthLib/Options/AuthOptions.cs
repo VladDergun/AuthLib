@@ -66,17 +66,37 @@ namespace AuthLib.Options
         /// </summary>
         public required string Issuer { get; set; }
         /// <summary>
+        /// Indicates whether the issuer claim (iss) should be validated against <see cref="Issuer"/> during token validation. Default is true.
+        /// </summary>
+        public bool ValidateIssuer { get; set; } = true;
+        /// <summary>
         /// The audience claim (aud) identifies the recipients that the JWT is intended for.
         /// </summary>
         public required string Audience { get; set; }
+        /// <summary>
+        /// Indicates whether the audience claim (aud) should be validated against <see cref="Audience"/> during token validation. Default is true.
+        /// </summary>
+        public bool ValidateAudience { get; set; } = true;
         /// <summary>
         /// The secret key used to sign and validate JWTs. This should be a strong, randomly generated value.
         /// </summary>
         public required string SigningKey { get; set; }
         /// <summary>
+        /// Indicates whether the signing key used to sign the token should be validated against <see cref="SigningKey"/> during token validation. Default is true.
+        /// </summary>
+        public bool ValidateIssuerSigningKey { get; set; } = true;
+        /// <summary>
         /// The lifetime of access tokens. Default is 15 minutes.
         /// </summary>
         public TimeSpan AccessTokenLifetime { get; set; } = TimeSpan.FromMinutes(15);
+        /// <summary>
+        /// Indicates whether the token's lifetime (exp/nbf claims) should be validated during token validation. Default is true.
+        /// </summary>
+        public bool ValidateLifetime { get; set; } = true;
+        /// <summary>
+        /// The clock skew allowance applied when validating token lifetimes to account for clock drift between servers. Default is 5 minutes.
+        /// </summary>
+        public TimeSpan ClockSkew { get; set; } = TimeSpan.FromMinutes(5);
         /// <summary>
         /// The lifetime of refresh tokens. Default is 7 days.
         /// </summary>

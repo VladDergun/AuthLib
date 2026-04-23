@@ -9,7 +9,7 @@ namespace AuthLib.Interfaces.Services
         /// <param name="ct">Cancellation Token</param>
         /// <returns>User object</returns>
         /// <exception cref="InvalidOperationException">Thrown when user is not found</exception>
-        Task<TUser> GetByIdAsync(string id, CancellationToken ct = default);
+        Task<TUser?> GetByIdAsync(string id, CancellationToken ct = default);
 
         /// <summary>
         /// Gets a user's email by their ID
@@ -18,6 +18,6 @@ namespace AuthLib.Interfaces.Services
         /// <param name="ct">Cancellation Token</param>
         /// <returns>User email</returns>
         /// <exception cref="InvalidOperationException">Thrown when user is not found</exception>
-        Task<string> GetUserEmailAsync(string id, CancellationToken ct = default);
+        Task<string?> GetUserEmailAsync(string id, CancellationToken ct = default);
     }
 }

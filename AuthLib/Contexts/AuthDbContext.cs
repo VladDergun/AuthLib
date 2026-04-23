@@ -14,7 +14,9 @@ namespace AuthLib.Contexts
         /// </summary>
         /// <param name="options">DbContext options.</param>
         /// <param name="schema">Schema used for the authentication tables. If null, no schema will be used.</param>
-        public AuthDbContext(DbContextOptions options, string? schema = null) : base(options, schema) { }
+        /// <param name="useOAuth">If true, OAuth provider tables and navigations are included.</param>
+        public AuthDbContext(DbContextOptions options, string? schema = null, bool? useOAuth = true)
+            : base(options, schema, useOAuth) { }
     }
 
     public abstract class AuthDbContext<TKey, TUser> : AuthDbContext<TKey, TUser, AuthRole<TKey>>
@@ -26,7 +28,9 @@ namespace AuthLib.Contexts
         /// </summary>
         /// <param name="options">DbContext options.</param>
         /// <param name="schema">Schema used for the authentication tables. If null, no schema will be used.</param>
-        public AuthDbContext(DbContextOptions options, string? schema = null) : base(options, schema) { }
+        /// <param name="useOAuth">If true, OAuth provider tables and navigations are included.</param>
+        public AuthDbContext(DbContextOptions options, string? schema = null, bool? useOAuth = true)
+            : base(options, schema, useOAuth) { }
     }
 
     public abstract class AuthDbContext<TKey, TUser, TRole>
@@ -36,15 +40,17 @@ namespace AuthLib.Contexts
         where TRole : AuthRole<TKey>
     {
         protected string? Schema { get; }
+        protected bool UseOAuth { get; }
 
         /// <summary>
         /// Creates a new instance of the AuthDbContext class.
         /// </summary>
         /// <param name="options">DbContext options.</param>
         /// <param name="schema">Schema used for the authentication tables. If null, no schema will be used.</param>
-        public AuthDbContext(DbContextOptions options, string? schema = null) : base(options)
+        public AuthDbContext(DbContextOptions options, string? schema = null, bool? useOAuth = true) : base(options)
         {
             Schema = schema;
+            UseOAuth = useOAuth ?? true;
         }
 
         public DbSet<TUser> AuthUsers => Set<TUser>();
@@ -56,9 +62,17 @@ namespace AuthLib.Contexts
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-            modelBuilder.ApplyConfiguration(new AuthUserConfiguration<TKey, TUser, TRole>());
+            modelBuilder.ApplyConfiguration(new AuthUserConfiguration<TKey, TUser, TRole>(UseOAuth));
             modelBuilder.ApplyConfiguration(new UserAuthRoleConfiguration<TKey>(Schema));
-            modelBuilder.ApplyConfiguration(new AuthProviderConfiguration<TKey>(Schema));
+            if (UseOAuth)
+            {
+                modelBuilder.ApplyConfiguration(new AuthProviderConfiguration<TKey>(Schema));
+            }
+            else
+            {
+                modelBuilder.Ignore<UserAuthProvider<TKey>>();
+            }
+
             modelBuilder.ApplyConfiguration(new AuthTokenConfiguration<TKey>(Schema));
             modelBuilder.ApplyConfiguration(new AuthRoleConfiguration<TKey>(Schema));
         }

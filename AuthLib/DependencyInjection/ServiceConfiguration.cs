@@ -78,20 +78,49 @@ namespace AuthLib.DependencyInjection
             authDependencyBuilder.Services.TryAddScoped(typeof(IRoleSeederService), typeof(RoleSeederService<,,>)
                 .MakeGenericType(keyType, userType, roleType));
 
-            authDependencyBuilder.Services.TryAddScoped(typeof(RoleStore<,,>)
-                .MakeGenericType(keyType, userType, roleType));
+            authDependencyBuilder.AddStores(keyType, userType, roleType);
+            authDependencyBuilder.AddBackgroundJobs(keyType, userType, roleType);
 
-            var userStoreType = typeof(UserStore<,,>)
-                .MakeGenericType(keyType, userType, roleType);
+            return authDependencyBuilder;
+        }
 
-            authDependencyBuilder.Services.TryAddScoped(userStoreType);
-            authDependencyBuilder.Services.TryAddScoped(
-                typeof(IUserStore<>).MakeGenericType(userType),
-                sp => sp.GetRequiredService(userStoreType));
+        public static AuthDependencyBuilder AddJwtAuthentication(this AuthDependencyBuilder authDependencyBuilder)
+        {
+            var jwtOptions = authDependencyBuilder.Options.JWTOptions;
 
-            authDependencyBuilder.Services.TryAddScoped(typeof(TokenStore<,,>)
-                .MakeGenericType(keyType, userType, roleType));
+            authDependencyBuilder.Services
+                .AddAuthentication(options =>
+                {
+                    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                })
+                .AddJwtBearer(options =>
+                {
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuer = jwtOptions.ValidateIssuer,
+                        ValidateAudience = jwtOptions.ValidateAudience,
+                        ValidateLifetime = jwtOptions.ValidateLifetime,
+                        ValidateIssuerSigningKey = jwtOptions.ValidateIssuerSigningKey,
+                        ValidIssuer = jwtOptions.Issuer,
+                        ValidAudience = jwtOptions.Audience,
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
+                        ClockSkew = jwtOptions.ClockSkew
+                    };
+                });
 
+            authDependencyBuilder.Services.AddAuthorization();
+
+            return authDependencyBuilder;
+        }
+
+
+        private static AuthDependencyBuilder AddBackgroundJobs(
+            this AuthDependencyBuilder authDependencyBuilder,
+            Type keyType,
+            Type userType,
+            Type roleType)
+        {
 
             authDependencyBuilder.Services.AddHostedService<RoleSeedingTask>();
 
@@ -116,32 +145,33 @@ namespace AuthLib.DependencyInjection
             return authDependencyBuilder;
         }
 
-        public static AuthDependencyBuilder AddJwtAuthentication(this AuthDependencyBuilder authDependencyBuilder)
+        private static AuthDependencyBuilder AddStores(
+            this AuthDependencyBuilder authDependencyBuilder,
+            Type keyType,
+            Type userType,
+            Type roleType)
         {
-            var jwtOptions = authDependencyBuilder.Options.JWTOptions;
+            //role store
+            var roleStoreType = typeof(RoleStore<,,>)
+                .MakeGenericType(keyType, userType, roleType);
 
-            authDependencyBuilder.Services
-                .AddAuthentication(options =>
-                {
-                    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-                })
-                .AddJwtBearer(options =>
-                {
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        ValidIssuer = jwtOptions.Issuer,
-                        ValidAudience = jwtOptions.Audience,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
-                        ClockSkew = TimeSpan.Zero
-                    };
-                });
+            authDependencyBuilder.Services.TryAddScoped(roleStoreType);
+            authDependencyBuilder.Services.TryAddScoped(
+                typeof(IRoleStore<>).MakeGenericType(roleType),
+                sp => sp.GetRequiredService(roleStoreType));
 
-            authDependencyBuilder.Services.AddAuthorization();
+            //user store
+            var userStoreType = typeof(UserStore<,,>)
+                .MakeGenericType(keyType, userType, roleType);
+
+            authDependencyBuilder.Services.TryAddScoped(userStoreType);
+            authDependencyBuilder.Services.TryAddScoped(
+                typeof(IUserStore<>).MakeGenericType(userType),
+                sp => sp.GetRequiredService(userStoreType));
+
+            //token store
+            authDependencyBuilder.Services.TryAddScoped(typeof(TokenStore<,,>)
+                .MakeGenericType(keyType, userType, roleType));
 
             return authDependencyBuilder;
         }

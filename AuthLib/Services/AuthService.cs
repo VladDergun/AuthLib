@@ -45,7 +45,7 @@ namespace AuthLib.Services
         {
             email = email.Trim().ToLowerInvariant();
 
-            var validationResult = ValidateEmailAndPassword(email, password);
+            var validationResult = AuthValidator.ValidateEmailAndPassword(email, password, _authOptions.PasswordOptions);
             if (!validationResult.IsValid)
             {
                 return validationResult.Errors.ToArray();
@@ -119,24 +119,42 @@ namespace AuthLib.Services
 
         public async Task<Result<TokenReadDto>> RegisterAsync(string email, string password, string roleName, CancellationToken ct = default)
         {
-            return await RegisterAsync(email, password, await _roleStore.GetByNameAsync(roleName, ct), ct);
+            var role = await _roleStore.GetByNameAsync(roleName, ct)
+                .ConfigureAwait(false);
+
+            if(role is null)
+            {
+                return "Role not found";
+            }
+
+            return await RegisterAsync(email, password, role, ct);
         }
 
         public async Task<Result<TokenReadDto>> RegisterAsync(TUser user, string password, CancellationToken ct = default)
         {
-            return await RegisterAsync(user, password, await _roleStore.GetDefaultAsync(ct), ct);
+            return await RegisterAsync(user, password, await _roleStore.GetDefaultAsync(ct).ConfigureAwait(false), ct)
+                .ConfigureAwait(false);
         }
 
         public async Task<Result<TokenReadDto>> RegisterAsync(TUser user, string password, string roleName, CancellationToken ct = default)
         {
-            return await RegisterAsync(user, password, await _roleStore.GetByNameAsync(roleName, ct), ct);
+            var role = await _roleStore.GetByNameAsync(roleName, ct)
+                .ConfigureAwait(false);
+
+            if (role is null)
+            {
+                return "Role not found";
+            }
+
+            return await RegisterAsync(user, password, role, ct)
+                .ConfigureAwait(false);
         }
 
-        private async Task<Result<TokenReadDto>> RegisterAsync(string email, string password, AuthRole<TKey> role, CancellationToken ct = default)
+        private async Task<Result<TokenReadDto>> RegisterAsync(string email, string password, TRole role, CancellationToken ct = default)
         {
             email = email.Trim().ToLowerInvariant();
 
-            var validationResult = ValidateEmailAndPassword(email, password);
+            var validationResult = AuthValidator.ValidateEmailAndPassword(email, password, _authOptions.PasswordOptions);
             if (!validationResult.IsValid)
             {
                 return validationResult.Errors.ToArray();
@@ -201,14 +219,14 @@ namespace AuthLib.Services
             return new TokenReadDto(accessToken, token, TokenType.Refresh, user.Id.ToString());
         }
 
-        private async Task<Result<TokenReadDto>> RegisterAsync(TUser user, string password, AuthRole<TKey> role, CancellationToken ct = default)
+        private async Task<Result<TokenReadDto>> RegisterAsync(TUser user, string password, TRole role, CancellationToken ct = default)
         {
-            if (user == null)
-                throw new ArgumentNullException(nameof(user));
+            ArgumentNullException.ThrowIfNull(user);
 
             user.Email = user.Email.Trim().ToLowerInvariant();
 
-            var validationResult = ValidateEmailAndPassword(user.Email, password);
+            var validationResult = AuthValidator.ValidateEmailAndPassword(user.Email, password, _authOptions.PasswordOptions);
+
             if (!validationResult.IsValid)
             {
                 return validationResult.Errors.ToArray();
@@ -270,7 +288,7 @@ namespace AuthLib.Services
 
         #endregion
 
-
+        #region Token Refresh
         public async Task<Result<TokenReadDto>> RefreshAsync(string refreshToken, CancellationToken ct = default)
         {
             var hash = _tokenManagerService.HashToken(refreshToken);
@@ -306,11 +324,19 @@ namespace AuthLib.Services
             var email = await _userStore.GetUserEmailAsync(token.UserId, ct)
                 .ConfigureAwait(false);
 
+            if (email is null)
+            {
+                return ErrorCodes.UserNotFound;
+            }
+
             var accessToken = _tokenManagerService.GenerateJWTToken(token.UserId.ToString()!, email, roles: roles);
 
             return new TokenReadDto(accessToken, newToken, TokenType.Refresh, token.UserId.ToString());
         }
 
+        #endregion
+
+        #region Logout
         public async Task<Result> LogoutAsync(string refreshToken, CancellationToken ct = default)
         {
             var hash = _tokenManagerService.HashToken(refreshToken);
@@ -351,6 +377,9 @@ namespace AuthLib.Services
             return Result.Success();
         }
 
+        #endregion
+
+        #region Password Reset
         public async Task<Result<string>> RequestPasswordResetAsync(string email, CancellationToken ct = default)
         {
             email = email.Trim().ToLowerInvariant();
@@ -407,6 +436,11 @@ namespace AuthLib.Services
             var user = await _userStore.GetByIdAsync(authToken.UserId, ct)
                 .ConfigureAwait(false);
 
+            if(user is null)
+            {
+                return ErrorCodes.UserNotFound;
+            }
+
             // Update password
             user.HashedPassword = _authSecurityService.HashPassword(newPassword);
 
@@ -424,6 +458,9 @@ namespace AuthLib.Services
             return Result.Success();
         }
 
+        #endregion
+
+        #region Email verification
         public async Task<Result> VerifyEmailAsync(string token, CancellationToken ct = default)
         {
             var hash = _tokenManagerService.HashToken(token);
@@ -438,6 +475,11 @@ namespace AuthLib.Services
 
             var user = await _userStore.GetByIdAsync(authToken.UserId, ct)
                 .ConfigureAwait(false);
+
+            if (user is null)
+            {
+                return ErrorCodes.UserNotFound;
+            }
 
             if (user.IsEmailVerified)
             {
@@ -456,6 +498,8 @@ namespace AuthLib.Services
 
             return Result.Success();
         }
+
+        #endregion
 
         #region Two-Factor Authentication
 
@@ -558,6 +602,11 @@ namespace AuthLib.Services
             var email = await _userStore.GetUserEmailAsync(token.UserId, ct)
                 .ConfigureAwait(false);
 
+            if (email is null)
+            {
+                return ErrorCodes.UserNotFound;
+            }
+
             var accessToken = _tokenManagerService.GenerateJWTToken(token.UserId.ToString()!, email, roles: roles);
 
             return new TokenReadDto(accessToken, refreshToken, TokenType.Refresh, token.UserId.ToString());
@@ -584,16 +633,5 @@ namespace AuthLib.Services
         #endregion
 
 
-        private ValidationResult ValidateEmailAndPassword(string email, string password)
-        {
-            var emailValidation = EmailValidator.Validate(email);
-            if (!emailValidation.IsValid)
-                return emailValidation;
-            var passwordValidation = PasswordValidator.Validate(password, _authOptions.PasswordOptions);
-            if (!passwordValidation.IsValid)
-                return passwordValidation;
-
-            return ValidationResult.Success();
-        }
     }
 }

@@ -1,4 +1,5 @@
-﻿using AuthLib.Contexts;
+﻿using AuthLib.Common.AuthResults;
+using AuthLib.Contexts;
 using AuthLib.Interfaces.Services;
 using AuthLib.Models;
 using AuthLib.Services.IdGenerators;
@@ -13,25 +14,28 @@ namespace AuthLib.Services.Stores
     {
         public DbSet<TUser> Users => Context.AuthUsers;
 
-        public async Task<TUser> GetByIdAsync(TKey id, CancellationToken ct)
+        public async Task<TUser?> GetByIdAsync(TKey id, CancellationToken ct)
         {
-            var user = await Users.FirstOrDefaultAsync(u => u.Id.Equals(id), ct).ConfigureAwait(false);
-            return user ?? throw new InvalidOperationException($"User with ID '{id}' not found.");
+            return await Users.FirstOrDefaultAsync(u => u.Id.Equals(id), ct)
+                .ConfigureAwait(false);
         }
 
-        public async Task<string> GetUserEmailAsync(TKey id, CancellationToken ct)
+        public async Task<string?> GetUserEmailAsync(TKey id, CancellationToken ct)
         {
-            return (await Users.FirstOrDefaultAsync(u => u.Id.Equals(id), ct).ConfigureAwait(false))?.Email
-                ?? throw new InvalidOperationException($"User with ID '{id}' not found.");
+            return await Users
+                .Where(u => u.Id.Equals(id))
+                .Select(u => u.Email)
+                .FirstOrDefaultAsync(ct)
+                .ConfigureAwait(false);
         }
 
-        public async Task<TUser> GetByIdAsync(string id, CancellationToken ct = default)
+        public async Task<TUser?> GetByIdAsync(string id, CancellationToken ct = default)
         {
             var typedId = IdConverter<TKey>.FromString(id);
             return await GetByIdAsync(typedId, ct).ConfigureAwait(false);
         }
 
-        public async Task<string> GetUserEmailAsync(string id, CancellationToken ct = default)
+        public async Task<string?> GetUserEmailAsync(string id, CancellationToken ct = default)
         {
             var typedId = IdConverter<TKey>.FromString(id);
             return await GetUserEmailAsync(typedId, ct).ConfigureAwait(false);

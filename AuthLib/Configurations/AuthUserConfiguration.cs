@@ -9,6 +9,12 @@ namespace AuthLib.Configurations
         where TUser : AuthUser<TKey, TRole>
         where TRole : AuthRole<TKey>
     {
+        private readonly bool _useOAuth;
+
+        public AuthUserConfiguration(bool useOAuth = false)
+        {
+            _useOAuth = useOAuth;
+        }
 
         public void Configure(EntityTypeBuilder<TUser> builder)
         {
@@ -22,9 +28,17 @@ namespace AuthLib.Configurations
                 .WithOne()
                 .HasForeignKey(uc => uc.UserId);
 
-            builder.HasMany(u => u.UserAuthProviders)
-                .WithOne()
-                .HasForeignKey(uc => uc.UserId);
+            if (_useOAuth)
+            {
+                builder.HasMany(u => u.UserAuthProviders)
+                    .WithOne()
+                    .HasForeignKey(uc => uc.UserId);
+            }
+            else
+            {
+                builder.Ignore(u => u.UserAuthProviders);
+                builder.Ignore(u => u.IsTwoFactorAuthEnabled);
+            }
 
             builder.Property(u => u.ConcurrencyStamp)
                 .IsConcurrencyToken()
