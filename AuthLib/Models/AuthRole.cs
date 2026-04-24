@@ -26,6 +26,6 @@ namespace AuthLib.Models
         public bool IsActive { get; set; } = true;
         [ConcurrencyCheck]
         public string ConcurrencyStamp { get; set; } = Guid.NewGuid().ToString();
-        public List<UserAuthRole<TRoleKey>> UserAuthRoles { get; set; } = [];
+        public ICollection<UserAuthRole<TRoleKey>> UserAuthRoles { get; set; } = [];
     }
 }

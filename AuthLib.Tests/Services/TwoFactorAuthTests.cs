@@ -46,7 +46,8 @@ namespace AuthLib.Tests.Services
                 tokenManagerService,
                 roleStore,
                 _userStore,
-                tokenStore);
+                tokenStore,
+                new AuthErrorDescriber());
         }
 
         public async ValueTask DisposeAsync()
@@ -64,8 +65,9 @@ namespace AuthLib.Tests.Services
             registerResult.Value.UserId.Should().NotBeNull();
 
             var user = await _userStore.GetByIdAsync(registerResult.Value.UserId, TestContext.Current.CancellationToken);
+            user.Should().NotBeNull();
 
-            var result = await _authService.BeginTwoFactorSetupAsync(user!, TestContext.Current.CancellationToken);
+            var result = await _authService.BeginTwoFactorSetupAsync(user, TestContext.Current.CancellationToken);
 
             result.IsSuccess.Should().BeTrue();
             result.Value.Should().NotBeNull();
@@ -84,8 +86,9 @@ namespace AuthLib.Tests.Services
             registerResult.Value.UserId.Should().NotBeNull();
 
             var user = await _userStore.GetByIdAsync(registerResult.Value.UserId, TestContext.Current.CancellationToken);
+            user.Should().NotBeNull();
 
-            var setupResult = await _authService.BeginTwoFactorSetupAsync(user!, TestContext.Current.CancellationToken);
+            var setupResult = await _authService.BeginTwoFactorSetupAsync(user, TestContext.Current.CancellationToken);
             var secret = ExtractSecretFromQrUrl(setupResult.Value!.QRCodeUri);
             var totp = new Totp(Base32Encoding.ToBytes(secret));
             var code = totp.ComputeTotp();
@@ -107,13 +110,14 @@ namespace AuthLib.Tests.Services
             registerResult.Value.UserId.Should().NotBeNull();
 
             var user = await _userStore.GetByIdAsync(registerResult.Value.UserId, TestContext.Current.CancellationToken);
+            user.Should().NotBeNull();
 
-            var setupResult = await _authService.BeginTwoFactorSetupAsync(user!, TestContext.Current.CancellationToken);
+            var setupResult = await _authService.BeginTwoFactorSetupAsync(user, TestContext.Current.CancellationToken);
 
-            var completeResult = await _authService.CompleteTwoFactorSetupAsync(user!, setupResult.Value!.JWTToken, "000000", TestContext.Current.CancellationToken);
+            var completeResult = await _authService.CompleteTwoFactorSetupAsync(user, setupResult.Value!.JWTToken, "000000", TestContext.Current.CancellationToken);
 
             completeResult.IsSuccess.Should().BeFalse();
-            completeResult.Errors.Should().Contain(ErrorCodes.InvalidTwoFactorCode);
+            completeResult.Errors.Should().Contain(new AuthErrorDescriber().InvalidTwoFactorCode);
         }
 
         [Fact]
@@ -125,12 +129,13 @@ namespace AuthLib.Tests.Services
             registerResult.Value.UserId.Should().NotBeNull();
 
             var user = await _userStore.GetByIdAsync(registerResult.Value.UserId, TestContext.Current.CancellationToken);
+            user.Should().NotBeNull();
 
-            var setupResult = await _authService.BeginTwoFactorSetupAsync(user!, TestContext.Current.CancellationToken);
+            var setupResult = await _authService.BeginTwoFactorSetupAsync(user, TestContext.Current.CancellationToken);
             var secret = ExtractSecretFromQrUrl(setupResult.Value!.QRCodeUri);
             var totp = new Totp(Base32Encoding.ToBytes(secret));
             var code = totp.ComputeTotp();
-            await _authService.CompleteTwoFactorSetupAsync(user!, setupResult.Value.JWTToken, code, TestContext.Current.CancellationToken);
+            await _authService.CompleteTwoFactorSetupAsync(user, setupResult.Value.JWTToken, code, TestContext.Current.CancellationToken);
 
             var loginResult = await _authService.LoginAsync("user@test.com", "Password123!", TestContext.Current.CancellationToken);
 
@@ -149,12 +154,13 @@ namespace AuthLib.Tests.Services
             registerResult.Value.UserId.Should().NotBeNull();
 
             var user = await _userStore.GetByIdAsync(registerResult.Value.UserId, TestContext.Current.CancellationToken);
+            user.Should().NotBeNull();
 
-            var setupResult = await _authService.BeginTwoFactorSetupAsync(user!, TestContext.Current.CancellationToken);
+            var setupResult = await _authService.BeginTwoFactorSetupAsync(user, TestContext.Current.CancellationToken);
             var secret = ExtractSecretFromQrUrl(setupResult.Value!.QRCodeUri);
             var totp = new Totp(Base32Encoding.ToBytes(secret));
             var setupCode = totp.ComputeTotp();
-            await _authService.CompleteTwoFactorSetupAsync(user!, setupResult.Value.JWTToken, setupCode, TestContext.Current.CancellationToken);
+            await _authService.CompleteTwoFactorSetupAsync(user, setupResult.Value.JWTToken, setupCode, TestContext.Current.CancellationToken);
 
             var loginResult = await _authService.LoginAsync("user@test.com", "Password123!", TestContext.Current.CancellationToken);
             var verifyCode = totp.ComputeTotp();
@@ -176,19 +182,21 @@ namespace AuthLib.Tests.Services
             registerResult.Value.UserId.Should().NotBeNull();
 
             var user = await _userStore.GetByIdAsync(registerResult.Value.UserId, TestContext.Current.CancellationToken);
+            user.Should().NotBeNull();
 
-            var setupResult = await _authService.BeginTwoFactorSetupAsync(user!, TestContext.Current.CancellationToken);
+            var setupResult = await _authService.BeginTwoFactorSetupAsync(user, TestContext.Current.CancellationToken);
             var secret = ExtractSecretFromQrUrl(setupResult.Value!.QRCodeUri);
             var totp = new Totp(Base32Encoding.ToBytes(secret));
             var code = totp.ComputeTotp();
-            await _authService.CompleteTwoFactorSetupAsync(user!, setupResult.Value.JWTToken, code, TestContext.Current.CancellationToken);
+            await _authService.CompleteTwoFactorSetupAsync(user, setupResult.Value.JWTToken, code, TestContext.Current.CancellationToken);
 
             var loginResult = await _authService.LoginAsync("user@test.com", "Password123!", TestContext.Current.CancellationToken);
+            loginResult.IsSuccess.Should().BeTrue();
 
             var verifyResult = await _authService.VerifyTwoFactorCodeAsync(loginResult.Value!.Token, "000000", TestContext.Current.CancellationToken);
 
             verifyResult.IsSuccess.Should().BeFalse();
-            verifyResult.Errors.Should().Contain(ErrorCodes.InvalidTwoFactorCode);
+            verifyResult.Errors.Should().Contain(new AuthErrorDescriber().InvalidTwoFactorCode);
         }
 
         [Fact]
@@ -200,14 +208,15 @@ namespace AuthLib.Tests.Services
             registerResult.Value.UserId.Should().NotBeNull();
 
             var user = await _userStore.GetByIdAsync(registerResult.Value.UserId, TestContext.Current.CancellationToken);
+            user.Should().NotBeNull();
 
-            var setupResult = await _authService.BeginTwoFactorSetupAsync(user!, TestContext.Current.CancellationToken);
+            var setupResult = await _authService.BeginTwoFactorSetupAsync(user, TestContext.Current.CancellationToken);
             var secret = ExtractSecretFromQrUrl(setupResult.Value!.QRCodeUri);
             var totp = new Totp(Base32Encoding.ToBytes(secret));
             var code = totp.ComputeTotp();
-            await _authService.CompleteTwoFactorSetupAsync(user!, setupResult.Value.JWTToken, code, TestContext.Current.CancellationToken);
+            await _authService.CompleteTwoFactorSetupAsync(user, setupResult.Value.JWTToken, code, TestContext.Current.CancellationToken);
 
-            var disableResult = await _authService.DisableTwoFactorAuthAsync(user!, "Password123!", TestContext.Current.CancellationToken);
+            var disableResult = await _authService.DisableTwoFactorAuthAsync(user, "Password123!", TestContext.Current.CancellationToken);
 
             disableResult.IsSuccess.Should().BeTrue();
             await _dbContext.Entry(user).ReloadAsync(TestContext.Current.CancellationToken);
@@ -224,17 +233,18 @@ namespace AuthLib.Tests.Services
             registerResult.Value.UserId.Should().NotBeNull();
 
             var user = await _userStore.GetByIdAsync(registerResult.Value.UserId, TestContext.Current.CancellationToken);
+            user.Should().NotBeNull();
 
-            var setupResult = await _authService.BeginTwoFactorSetupAsync(user!, TestContext.Current.CancellationToken);
+            var setupResult = await _authService.BeginTwoFactorSetupAsync(user, TestContext.Current.CancellationToken);
             var secret = ExtractSecretFromQrUrl(setupResult.Value!.QRCodeUri);
             var totp = new Totp(Base32Encoding.ToBytes(secret));
             var code = totp.ComputeTotp();
-            await _authService.CompleteTwoFactorSetupAsync(user!, setupResult.Value.JWTToken, code, TestContext.Current.CancellationToken);
+            await _authService.CompleteTwoFactorSetupAsync(user, setupResult.Value.JWTToken, code, TestContext.Current.CancellationToken);
 
-            var disableResult = await _authService.DisableTwoFactorAuthAsync(user!, "WrongPassword!", TestContext.Current.CancellationToken);
+            var disableResult = await _authService.DisableTwoFactorAuthAsync(user, "WrongPassword!", TestContext.Current.CancellationToken);
 
             disableResult.IsSuccess.Should().BeFalse();
-            disableResult.Errors.Should().Contain(ErrorCodes.InvalidCredentials);
+            disableResult.Errors.Should().Contain(new AuthErrorDescriber().InvalidCredentials);
         }
 
         [Fact]
@@ -246,12 +256,13 @@ namespace AuthLib.Tests.Services
             registerResult.Value.UserId.Should().NotBeNull();
 
             var user = await _userStore.GetByIdAsync(registerResult.Value.UserId, TestContext.Current.CancellationToken);
+            user.Should().NotBeNull();
 
-            var setupResult = await _authService.BeginTwoFactorSetupAsync(user!, TestContext.Current.CancellationToken);
+            var setupResult = await _authService.BeginTwoFactorSetupAsync(user, TestContext.Current.CancellationToken);
             var secret = ExtractSecretFromQrUrl(setupResult.Value!.QRCodeUri);
             var totp = new Totp(Base32Encoding.ToBytes(secret));
             var code = totp.ComputeTotp();
-            await _authService.CompleteTwoFactorSetupAsync(user!, setupResult.Value.JWTToken, code, TestContext.Current.CancellationToken); 
+            await _authService.CompleteTwoFactorSetupAsync(user, setupResult.Value.JWTToken, code, TestContext.Current.CancellationToken); 
             var firstLogin = await _authService.LoginAsync("user@test.com", "Password123!", TestContext.Current.CancellationToken);
             var firstToken = firstLogin.Value!.Token;
 
@@ -261,7 +272,7 @@ namespace AuthLib.Tests.Services
             var verifyResult = await _authService.VerifyTwoFactorCodeAsync(firstToken, verifyCode, TestContext.Current.CancellationToken);
 
             verifyResult.IsSuccess.Should().BeFalse();
-            verifyResult.Errors.Should().Contain(ErrorCodes.InvalidToken);
+            verifyResult.Errors.Should().Contain(new AuthErrorDescriber().InvalidToken);
         }
 
         private static string ExtractSecretFromQrUrl(string qrUrl)

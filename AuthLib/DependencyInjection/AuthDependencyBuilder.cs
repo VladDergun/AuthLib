@@ -8,7 +8,14 @@ namespace AuthLib.DependencyInjection
     /// </summary>
     public sealed class AuthDependencyBuilder
     {
-        public IServiceCollection Services { get; set; } = default!;
-        public AuthOptions Options { get; set; } = default!;
+        /// <summary>
+        /// The service collection that AuthLib registrations are written to.
+        /// </summary>
+        public required IServiceCollection Services { get; init; }
+
+        /// <summary>
+        /// The resolved <see cref="AuthOptions"/> snapshot used to configure AuthLib.
+        /// </summary>
+        public required AuthOptions Options { get; init; }
     }
 }

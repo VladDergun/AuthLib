@@ -20,30 +20,32 @@ namespace AuthLib.Services
                 throw new Exception("Only one default role allowed");
             }
 
-            List<TRole> existingRoles = await _roleStore.GetAllAsync(ct);
+            IReadOnlyCollection<TRole> existingRoles = await _roleStore
+                .GetAllAsync(ct).ConfigureAwait(false);
 
-            Dictionary<string, TRole> existingRolesDict = existingRoles.ToDictionary(r => r.Name, StringComparer.InvariantCultureIgnoreCase);
+            Dictionary<string, TRole> existingRolesDict = existingRoles
+                .ToDictionary(r => r.Name, StringComparer.InvariantCultureIgnoreCase);
 
             foreach (var role in roles)
             {
                 if (role.IsDefault)
                 {
-                    CreateDefaultRole(role.Name, existingRolesDict, ct);
-
+                    CreateDefaultRole(role.Name, existingRolesDict);
                 }
                 else
                 {
-                    CreateRole(role.Name, existingRolesDict, ct);
+                    CreateRole(role.Name, existingRolesDict);
                 }
             }
 
             DeactivateMissingRoles(roles, existingRoles);
 
-            await _roleStore.Context.SaveChangesAsync(ct);
+            await _roleStore.SaveChangesAsync(ct)
+                .ConfigureAwait(false);
         }
 
 
-        private void CreateRole(string roleName, Dictionary<string, TRole> existingRolesDict, CancellationToken ct)
+        private void CreateRole(string roleName, Dictionary<string, TRole> existingRolesDict)
         {
             if (existingRolesDict.ContainsKey(roleName))
             {
@@ -57,7 +59,7 @@ namespace AuthLib.Services
             });
         }
 
-        private void CreateDefaultRole(string roleName, Dictionary<string, TRole> existingRolesDict, CancellationToken ct)
+        private void CreateDefaultRole(string roleName, Dictionary<string, TRole> existingRolesDict)
         {
             if (existingRolesDict.TryGetValue(roleName, out var existingRole))
             {
@@ -67,10 +69,7 @@ namespace AuthLib.Services
                 var previousDefaultRole = existingRolesDict
                     .FirstOrDefault(r => r.Value.IsDefault).Value;
 
-                if (previousDefaultRole != null)
-                {
-                    previousDefaultRole.IsDefault = false;
-                }
+                previousDefaultRole?.IsDefault = false;
 
                 existingRole.IsDefault = true;
                 return;
@@ -90,7 +89,7 @@ namespace AuthLib.Services
 
         private static void DeactivateMissingRoles(
             IReadOnlyList<Role> roles,
-            IReadOnlyList<TRole> existingRoles)
+            IReadOnlyCollection<TRole> existingRoles)
         {
             foreach (var existingRole in existingRoles)
             {

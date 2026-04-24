@@ -39,9 +39,9 @@ namespace AuthLib.Models
 
         [ConcurrencyCheck]
         public string ConcurrencyStamp { get; set; } = Guid.NewGuid().ToString();
-        public virtual List<UserAuthProvider<TKey>> UserAuthProviders { get; set; } = [];
-        public virtual List<UserAuthRole<TKey>> UserRoles { get; set; } = [];
-        public virtual List<AuthToken<TKey>> AuthTokens { get; set; } = [];
+        public virtual ICollection<UserAuthProvider<TKey>> UserAuthProviders { get; set; } = [];
+        public virtual ICollection<UserAuthRole<TKey>> UserRoles { get; set; } = [];
+        public virtual ICollection<AuthToken<TKey>> AuthTokens { get; set; } = [];
 
     }
 }

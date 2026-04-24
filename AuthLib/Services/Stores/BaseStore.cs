@@ -9,6 +9,16 @@ namespace AuthLib.Services.Stores
         where TUser : AuthUser<TKey, TRole>
         where TRole : AuthRole<TKey>
     {
-        public readonly AuthDbContext<TKey, TUser, TRole> Context = authDbContext;
+        protected readonly AuthDbContext<TKey, TUser, TRole> Context = authDbContext;
+
+        public async Task<int> SaveChangesAsync(CancellationToken ct = default!)
+        {
+            return await Context.SaveChangesAsync(ct);
+        }
+
+        public int SaveChanges()
+        {
+            return Context.SaveChanges();
+        }
     }
 }

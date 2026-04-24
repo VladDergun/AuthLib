@@ -17,7 +17,12 @@ namespace AuthLib.Services
         private readonly AuthOptions _authOptions = authOptions.Value;
         private readonly IAuthSecurityService _authSecurityService = authSecurityService;
 
-        public string GenerateJWTToken(string userId, string email, DateTime? expires = null, IReadOnlyList<string>? roles = null, IReadOnlyDictionary<string, string>? additionalClaims = null)
+        public string GenerateJWTToken(
+            string userId,
+            string email,
+            DateTime? expires = null,
+            IReadOnlyList<string>? roles = null,
+            IReadOnlyDictionary<string, string>? additionalClaims = null)
         {
             var jwtOptions = _authOptions.JWTOptions;
 
@@ -49,7 +54,7 @@ namespace AuthLib.Services
 
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            expires ??= DateTime.UtcNow.Add(jwtOptions.AccessTokenLifetime);
+            expires ??= DateTime.UtcNow.Add(_authOptions.TokenOptions.AccessTokenLifetime);
 
             var token = new JwtSecurityToken(
                 issuer: jwtOptions.Issuer,

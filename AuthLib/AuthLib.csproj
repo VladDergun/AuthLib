@@ -3,7 +3,8 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-    </PropertyGroup>
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+	</PropertyGroup>
 
     <ItemGroup>
         <InternalsVisibleTo Include="AuthLib.Tests" />
@@ -21,7 +22,7 @@
 
     <PropertyGroup>
 	    <PackageId>VladyslavDerhun.AuthLib</PackageId>
-	    <Version>0.1.2-beta</Version>
+	    <Version>0.1.3-beta</Version>
 	    <Authors>Vladyslav Derhun</Authors>
 	    <Description>Modern authentication library for .NET with JWT, refresh tokens, and role-based auth</Description>
 	    <PackageTags>authentication;jwt;authorization;security;efcore</PackageTags>

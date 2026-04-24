@@ -25,7 +25,8 @@ namespace AuthLib.Services
         ITokenManagerService tokenManagerService,
         RoleStore<TKey, TUser, TRole> roleStore,
         UserStore<TKey, TUser, TRole> userStore,
-        TokenStore<TKey, TUser, TRole> tokenStore) : IAuthService<TUser>
+        TokenStore<TKey, TUser, TRole> tokenStore,
+        AuthErrorDescriber errorDescriber) : IAuthService<TUser>
             where TKey : IEquatable<TKey>
             where TUser : AuthUser<TKey, TRole>, new()
             where TRole : AuthRole<TKey>, new()
@@ -39,13 +40,14 @@ namespace AuthLib.Services
         private readonly ITokenManagerService _tokenManagerService = tokenManagerService;
 
         private readonly AuthOptions _authOptions = options.Value;
+        private readonly AuthErrorDescriber _errors = errorDescriber;
 
         #region Login
         public async Task<Result<TokenReadDto>> LoginAsync(string email, string password, CancellationToken ct = default)
         {
             email = email.Trim().ToLowerInvariant();
 
-            var validationResult = ValidateEmailAndPassword(email, password);
+            var validationResult = AuthValidator.ValidateEmailAndPassword(email, password, _authOptions.PasswordOptions);
             if (!validationResult.IsValid)
             {
                 return validationResult.Errors.ToArray();
@@ -65,18 +67,18 @@ namespace AuthLib.Services
 
             if (user == null || user.HashedPassword == null)
             {
-                return ErrorCodes.InvalidCredentials;
+                return _errors.InvalidCredentials;
             }
 
             bool isPasswordValid = _authSecurityService.VerifyPassword(password, user.HashedPassword);
             if (!isPasswordValid)
             {
-                return ErrorCodes.InvalidCredentials;
+                return _errors.InvalidCredentials;
             }
 
             if (!user.EmailVerified)
             {
-                return ErrorCodes.EmailNotVerified;
+                return _errors.EmailNotVerified;
             }
 
             if (user.IsTwoFactorAuthEnabled)
@@ -119,24 +121,42 @@ namespace AuthLib.Services
 
         public async Task<Result<TokenReadDto>> RegisterAsync(string email, string password, string roleName, CancellationToken ct = default)
         {
-            return await RegisterAsync(email, password, await _roleStore.GetByNameAsync(roleName, ct), ct);
+            var role = await _roleStore.GetByNameAsync(roleName, ct)
+                .ConfigureAwait(false);
+
+            if(role is null)
+            {
+                return _errors.RoleNotFound;
+            }
+
+            return await RegisterAsync(email, password, role, ct);
         }
 
         public async Task<Result<TokenReadDto>> RegisterAsync(TUser user, string password, CancellationToken ct = default)
         {
-            return await RegisterAsync(user, password, await _roleStore.GetDefaultAsync(ct), ct);
+            return await RegisterAsync(user, password, await _roleStore.GetDefaultAsync(ct).ConfigureAwait(false), ct)
+                .ConfigureAwait(false);
         }
 
         public async Task<Result<TokenReadDto>> RegisterAsync(TUser user, string password, string roleName, CancellationToken ct = default)
         {
-            return await RegisterAsync(user, password, await _roleStore.GetByNameAsync(roleName, ct), ct);
+            var role = await _roleStore.GetByNameAsync(roleName, ct)
+                .ConfigureAwait(false);
+
+            if (role is null)
+            {
+                return _errors.RoleNotFound;
+            }
+
+            return await RegisterAsync(user, password, role, ct)
+                .ConfigureAwait(false);
         }
 
-        private async Task<Result<TokenReadDto>> RegisterAsync(string email, string password, AuthRole<TKey> role, CancellationToken ct = default)
+        private async Task<Result<TokenReadDto>> RegisterAsync(string email, string password, TRole role, CancellationToken ct = default)
         {
             email = email.Trim().ToLowerInvariant();
 
-            var validationResult = ValidateEmailAndPassword(email, password);
+            var validationResult = AuthValidator.ValidateEmailAndPassword(email, password, _authOptions.PasswordOptions);
             if (!validationResult.IsValid)
             {
                 return validationResult.Errors.ToArray();
@@ -145,7 +165,7 @@ namespace AuthLib.Services
             if (await _authDbContext.AuthUsers.AnyAsync(u => u.Email == email, ct)
                 .ConfigureAwait(false))
             {
-                return ErrorCodes.EmailAlreadyInUse;
+                return _errors.EmailAlreadyInUse;
             }
 
             string passwordHash = _authSecurityService.HashPassword(password);
@@ -175,7 +195,7 @@ namespace AuthLib.Services
             }
             catch (DbUpdateException)
             {
-                return ErrorCodes.EmailAlreadyInUse;
+                return _errors.EmailAlreadyInUse;
             }
 
             // Add token after user is saved and has a valid ID
@@ -201,14 +221,14 @@ namespace AuthLib.Services
             return new TokenReadDto(accessToken, token, TokenType.Refresh, user.Id.ToString());
         }
 
-        private async Task<Result<TokenReadDto>> RegisterAsync(TUser user, string password, AuthRole<TKey> role, CancellationToken ct = default)
+        private async Task<Result<TokenReadDto>> RegisterAsync(TUser user, string password, TRole role, CancellationToken ct = default)
         {
-            if (user == null)
-                throw new ArgumentNullException(nameof(user));
+            ArgumentNullException.ThrowIfNull(user);
 
             user.Email = user.Email.Trim().ToLowerInvariant();
 
-            var validationResult = ValidateEmailAndPassword(user.Email, password);
+            var validationResult = AuthValidator.ValidateEmailAndPassword(user.Email, password, _authOptions.PasswordOptions);
+
             if (!validationResult.IsValid)
             {
                 return validationResult.Errors.ToArray();
@@ -217,7 +237,7 @@ namespace AuthLib.Services
             if (await _authDbContext.AuthUsers.AnyAsync(u => u.Email == user.Email, ct)
                 .ConfigureAwait(false))
             {
-                return ErrorCodes.EmailAlreadyInUse;
+                return _errors.EmailAlreadyInUse;
             }
 
             string passwordHash = _authSecurityService.HashPassword(password);
@@ -243,7 +263,7 @@ namespace AuthLib.Services
             }
             catch (DbUpdateException)
             {
-                return ErrorCodes.EmailAlreadyInUse;
+                return _errors.EmailAlreadyInUse;
             }
 
             if (_authOptions.EmailVerificationRequired)
@@ -270,7 +290,7 @@ namespace AuthLib.Services
 
         #endregion
 
-
+        #region Token Refresh
         public async Task<Result<TokenReadDto>> RefreshAsync(string refreshToken, CancellationToken ct = default)
         {
             var hash = _tokenManagerService.HashToken(refreshToken);
@@ -279,17 +299,17 @@ namespace AuthLib.Services
                 .ConfigureAwait(false);
 
             if (token == null || token.TokenType != TokenType.Refresh)
-                return ErrorCodes.InvalidToken;
+                return _errors.InvalidToken;
 
             if (token.IsRevoked)
             {
                 await _tokenStore.RevokeUserTokens(token.UserId, [TokenRevokationOption.All], ct)
                     .ConfigureAwait(false);
-                return ErrorCodes.InvalidTokenReused;
+                return _errors.InvalidTokenReused;
             }
 
             if (token.TokenExpiry < DateTime.UtcNow)
-                return ErrorCodes.TokenExpired;
+                return _errors.TokenExpired;
 
             token.Revoke();
 
@@ -306,11 +326,19 @@ namespace AuthLib.Services
             var email = await _userStore.GetUserEmailAsync(token.UserId, ct)
                 .ConfigureAwait(false);
 
+            if (email is null)
+            {
+                return _errors.UserNotFound;
+            }
+
             var accessToken = _tokenManagerService.GenerateJWTToken(token.UserId.ToString()!, email, roles: roles);
 
             return new TokenReadDto(accessToken, newToken, TokenType.Refresh, token.UserId.ToString());
         }
 
+        #endregion
+
+        #region Logout
         public async Task<Result> LogoutAsync(string refreshToken, CancellationToken ct = default)
         {
             var hash = _tokenManagerService.HashToken(refreshToken);
@@ -319,7 +347,7 @@ namespace AuthLib.Services
                 .ConfigureAwait(false);
 
             if (token == null)
-                return ErrorCodes.InvalidToken;
+                return _errors.InvalidToken;
 
             if (token.IsRevoked)
                 return Result.Success();
@@ -340,7 +368,7 @@ namespace AuthLib.Services
                 .ConfigureAwait(false);
 
             if (token == null)
-                return ErrorCodes.InvalidToken;
+                return _errors.InvalidToken;
 
             await _tokenStore.RevokeUserTokens(token.UserId, [TokenRevokationOption.Refresh], ct)
                 .ConfigureAwait(false);
@@ -351,6 +379,9 @@ namespace AuthLib.Services
             return Result.Success();
         }
 
+        #endregion
+
+        #region Password Reset
         public async Task<Result<string>> RequestPasswordResetAsync(string email, CancellationToken ct = default)
         {
             email = email.Trim().ToLowerInvariant();
@@ -398,14 +429,19 @@ namespace AuthLib.Services
                 .ConfigureAwait(false);
 
             if (authToken == null || authToken.TokenType != TokenType.PasswordReset || authToken.IsRevoked)
-                return ErrorCodes.InvalidToken;
+                return _errors.InvalidToken;
 
             if (authToken.TokenExpiry < DateTime.UtcNow)
-                return ErrorCodes.TokenExpired;
+                return _errors.TokenExpired;
 
             //Get user
             var user = await _userStore.GetByIdAsync(authToken.UserId, ct)
                 .ConfigureAwait(false);
+
+            if(user is null)
+            {
+                return _errors.UserNotFound;
+            }
 
             // Update password
             user.HashedPassword = _authSecurityService.HashPassword(newPassword);
@@ -424,6 +460,9 @@ namespace AuthLib.Services
             return Result.Success();
         }
 
+        #endregion
+
+        #region Email verification
         public async Task<Result> VerifyEmailAsync(string token, CancellationToken ct = default)
         {
             var hash = _tokenManagerService.HashToken(token);
@@ -432,12 +471,17 @@ namespace AuthLib.Services
                 .ConfigureAwait(false);
 
             if (authToken == null || authToken.TokenType != TokenType.EmailVerification || authToken.IsRevoked)
-                return ErrorCodes.InvalidToken;
+                return _errors.InvalidToken;
             if (authToken.TokenExpiry < DateTime.UtcNow)
-                return ErrorCodes.TokenExpired;
+                return _errors.TokenExpired;
 
             var user = await _userStore.GetByIdAsync(authToken.UserId, ct)
                 .ConfigureAwait(false);
+
+            if (user is null)
+            {
+                return _errors.UserNotFound;
+            }
 
             if (user.IsEmailVerified)
             {
@@ -457,12 +501,14 @@ namespace AuthLib.Services
             return Result.Success();
         }
 
+        #endregion
+
         #region Two-Factor Authentication
 
         public async Task<Result<TwoFactorSetupReadDto>> BeginTwoFactorSetupAsync(TUser user, CancellationToken ct = default)
         {
             if (_authOptions.EmailVerificationRequired && !user.IsEmailVerified)
-                return ErrorCodes.EmailNotVerified;
+                return _errors.EmailNotVerified;
 
             string key = TokenManagerService.GenerateTwoFactorAuthKey();
 
@@ -486,18 +532,18 @@ namespace AuthLib.Services
             var principal = _tokenManagerService.ValidateJWTToken(token);
 
             if (principal == null || principal.Claims.FirstOrDefault(c => c.Type == "type" && c.Value == "2fa_setup") == null)
-                return ErrorCodes.InvalidToken;
+                return _errors.InvalidToken;
 
             var secretClaim = principal.Claims.FirstOrDefault(c => c.Type == "secret");
             if (secretClaim == null)
-                return ErrorCodes.InvalidToken;
+                return _errors.InvalidToken;
 
             var totp = new Totp(Base32Encoding.ToBytes(secretClaim.Value));
 
             var isValid = totp.VerifyTotp(code, out _, new VerificationWindow(1, 1));
 
             if (!isValid)
-                return ErrorCodes.InvalidTwoFactorCode;
+                return _errors.InvalidTwoFactorCode;
 
             user.TwoFactorAuthSecret = secretClaim.Value;
             user.IsTwoFactorAuthEnabled = true;
@@ -516,29 +562,29 @@ namespace AuthLib.Services
                 .ConfigureAwait(false);
 
             if (token == null || token.TokenType != TokenType.TwoFactorAuth)
-                return ErrorCodes.InvalidToken;
+                return _errors.InvalidToken;
 
             if (token.IsRevoked)
-                return ErrorCodes.InvalidToken;
+                return _errors.InvalidToken;
 
             if (token.TokenExpiry < DateTime.UtcNow)
-                return ErrorCodes.TokenExpired;
+                return _errors.TokenExpired;
 
             var user = await _userStore.GetByIdAsync(token.UserId, ct)
                 .ConfigureAwait(false);
 
             if (user == null)
-                return ErrorCodes.UserNotFound;
+                return _errors.UserNotFound;
 
             if (!user.IsTwoFactorAuthEnabled || string.IsNullOrEmpty(user.TwoFactorAuthSecret))
-                return ErrorCodes.TwoFactorNotEnabled;
+                return _errors.TwoFactorNotEnabled;
 
             var totp = new Totp(Base32Encoding.ToBytes(user.TwoFactorAuthSecret));
 
             var isValid = totp.VerifyTotp(code, out _, new VerificationWindow(1, 1));
 
             if (!isValid)
-                return ErrorCodes.InvalidTwoFactorCode;
+                return _errors.InvalidTwoFactorCode;
 
             token.Revoke();
 
@@ -558,6 +604,11 @@ namespace AuthLib.Services
             var email = await _userStore.GetUserEmailAsync(token.UserId, ct)
                 .ConfigureAwait(false);
 
+            if (email is null)
+            {
+                return _errors.UserNotFound;
+            }
+
             var accessToken = _tokenManagerService.GenerateJWTToken(token.UserId.ToString()!, email, roles: roles);
 
             return new TokenReadDto(accessToken, refreshToken, TokenType.Refresh, token.UserId.ToString());
@@ -566,11 +617,11 @@ namespace AuthLib.Services
         public async Task<Result> DisableTwoFactorAuthAsync(TUser user, string password, CancellationToken ct = default)
         {
             if (!user.IsTwoFactorAuthEnabled)
-                return ErrorCodes.TwoFactorNotEnabled;
+                return _errors.TwoFactorNotEnabled;
 
             bool isPasswordValid = _authSecurityService.VerifyPassword(password, user.HashedPassword!);
             if (!isPasswordValid)
-                return ErrorCodes.InvalidCredentials;
+                return _errors.InvalidCredentials;
 
             user.IsTwoFactorAuthEnabled = false;
             user.TwoFactorAuthSecret = null;
@@ -584,16 +635,5 @@ namespace AuthLib.Services
         #endregion
 
 
-        private ValidationResult ValidateEmailAndPassword(string email, string password)
-        {
-            var emailValidation = EmailValidator.Validate(email);
-            if (!emailValidation.IsValid)
-                return emailValidation;
-            var passwordValidation = PasswordValidator.Validate(password, _authOptions.PasswordOptions);
-            if (!passwordValidation.IsValid)
-                return passwordValidation;
-
-            return ValidationResult.Success();
-        }
     }
 }

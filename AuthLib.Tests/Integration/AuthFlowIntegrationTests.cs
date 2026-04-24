@@ -65,7 +65,7 @@ namespace AuthLib.Tests.Integration
             _dbContext.ChangeTracker.Clear();
 
             var authService = new AuthService<int, TestUser, AuthRole<int>>(
-                authSecurityService, _dbContext, authOptions, tokenManagerService, roleStore, userStore, tokenStore);
+                authSecurityService, _dbContext, authOptions, tokenManagerService, roleStore, userStore, tokenStore, new AuthErrorDescriber());
 
             _authService = authService;
 
@@ -283,7 +283,7 @@ namespace AuthLib.Tests.Integration
                     var userStore = new UserStore<int, TestUser, AuthRole<int>>(dbContext);
                     var tokenStore = new TokenStore<int, TestUser, AuthRole<int>>(dbContext, options: authOptions);
                     var authService = new AuthService<int, TestUser, AuthRole<int>>(
-                        authSecurityService, dbContext, authOptions, tokenManagerService, roleStore, userStore, tokenStore);
+                        authSecurityService, dbContext, authOptions, tokenManagerService, roleStore, userStore, tokenStore, new AuthErrorDescriber());
 
                     return authService.RegisterAsync(email, password, TestContext.Current.CancellationToken);
                 })

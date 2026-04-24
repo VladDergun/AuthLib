@@ -97,9 +97,14 @@ builder.Services.AddAuthServices(new AuthOptions
     {
         Issuer = "YourApp",
         Audience = "YourAppUsers",
-        SigningKey = "your-signing-key-at-least-32-characters-long",
+        SigningKey = "your-signing-key-at-least-32-characters-long"
+    },
+    TokenOptions = new TokenOptions
+    {
         AccessTokenLifetime = TimeSpan.FromMinutes(15),
-        RefreshTokenLifetime = TimeSpan.FromDays(7)
+        RefreshTokenLifetime = TimeSpan.FromDays(7),
+        EmailVerificationTokenLifetime = TimeSpan.FromDays(1),
+        PasswordResetTokenLifetime = TimeSpan.FromMinutes(30)
     },
     PasswordOptions = new PasswordOptions
     {
@@ -116,7 +121,7 @@ builder.Services.AddAuthServices(new AuthOptions
     }
 })
 .AddEntityFrameworkStores<AppDbContext>()
-.AddJwtAuthentication(); // Enable JWT authentication for [Authorize] attribute
+.AddJwtAuthentication(); // This adds JWT authentication middleware. Required for protected endpoints
 
 var app = builder.Build();
 
@@ -252,17 +257,29 @@ Extended interface for custom user models.
 | `EmailVerificationRequired` | `bool` | No | Require email verification (default: `false`) |
 | `Roles` | `List<Role>` | Yes | Available roles in the system |
 | `JWTOptions` | `JWTOptions` | Yes | JWT configuration |
+| `TokenOptions` | `TokenOptions` | Yes | Token lifetimes (access, refresh, email verification, password reset) |
 | `PasswordOptions` | `PasswordOptions` | No | Password validation rules |
 | `TokenCleanupOptions` | `TokenCleanupOptions` | No | Token cleanup configuration |
+| `TwoFactorAuthOptions` | `TwoFactorAuthOptions` | No | Two-factor authentication configuration |
 
 ### JWTOptions
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Issuer` | `string` | Required | JWT issuer claim |
+| `ValidateIssuer` | `bool` | true | Validate the `iss` claim against `Issuer` |
 | `Audience` | `string` | Required | JWT audience claim |
+| `ValidateAudience` | `bool` | true | Validate the `aud` claim against `Audience` |
 | `SigningKey` | `string` | Required | Key for signing tokens |
-| `AccessTokenLifetime` | `TimeSpan` | 15 minutes | Access token expiration |
+| `ValidateIssuerSigningKey` | `bool` | true | Validate the token signing key |
+| `ValidateLifetime` | `bool` | true | Validate token lifetime (`exp`/`nbf`) |
+| `ClockSkew` | `TimeSpan` | 5 minutes | Clock drift tolerance for lifetime validation |
+
+### TokenOptions
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `AccessTokenLifetime` | `TimeSpan` | 15 minutes | Access (JWT) token expiration |
 | `RefreshTokenLifetime` | `TimeSpan` | 7 days | Refresh token expiration |
 | `EmailVerificationTokenLifetime` | `TimeSpan` | 1 day | Email verification token expiration |
 | `PasswordResetTokenLifetime` | `TimeSpan` | 30 minutes | Password reset token expiration |
@@ -287,6 +304,14 @@ Extended interface for custom user models.
 | `Enabled` | `bool` | true | Enable automatic cleanup |
 | `CleanupInterval` | `TimeSpan` | 24 hours | Cleanup frequency |
 | `RetentionPeriod` | `TimeSpan` | 30 days | How long to keep expired tokens |
+
+### TwoFactorAuthOptions
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Issuer` | `string` | Required | Issuer shown in authenticator apps (TOTP label) |
+| `SetupTokenLifetime` | `TimeSpan` | 5 minutes | Lifetime of the 2FA setup token |
+| `TwoFactorTokenLifetime` | `TimeSpan` | 5 minutes | Lifetime of the 2FA challenge token |
 
 ## Advanced Usage
 
@@ -347,10 +372,40 @@ public class Role : AuthRole<Guid> { }
 public class AppDbContext : AuthDbContext<Guid, User, Role> { }
 
 // With string keys (default)
-public class User : AuthUser<Role> { }
-public class Role : AuthRole { }
+public class User : AuthUser
 public class AppDbContext : AuthDbContext<User> { }
 ```
+
+### Customizing Error Messages
+
+All user-facing error messages returned in `Result.Errors` come from `AuthErrorDescriber`, a scoped service with a virtual property for every message. Derive from it and override only the messages you want to change (e.g. for localization, tone, or to expose stable error codes):
+
+```csharp
+using AuthLib.Services;
+
+public sealed class SpanishErrorDescriber : AuthErrorDescriber
+{
+    public override string InvalidCredentials   => "Credenciales inválidas.";
+    public override string EmailAlreadyInUse    => "El correo ya está en uso.";
+    public override string InvalidToken         => "Token inválido.";
+    public override string TokenExpired         => "El token ha expirado.";
+    public override string EmailNotVerified     => "El correo no está verificado.";
+    public override string InvalidTwoFactorCode => "Código 2FA inválido.";
+    // ...override any of: InvalidTokenReused, UserNotFound, RoleNotFound,
+    //                     TwoFactorRequired, TwoFactorNotEnabled
+}
+```
+
+Register it alongside the rest of the AuthLib pipeline:
+
+```csharp
+builder.Services.AddAuthServices(authOptions)
+    .AddEntityFrameworkStores<AppDbContext>()
+    .AddErrorDescriber<SpanishErrorDescriber>()
+    .AddJwtAuthentication();
+```
+
+`AddErrorDescriber<T>` replaces the default describer in DI, so every `AuthService` operation will surface your overridden messages. Any property you do **not** override falls back to the built-in English default.
 
 ## Security Best Practices
 
