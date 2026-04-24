@@ -120,7 +120,8 @@ builder.Services.AddAuthServices(new AuthOptions
         RetentionPeriod = TimeSpan.FromDays(30)
     }
 })
-.AddEntityFrameworkStores<AppDbContext>();
+.AddEntityFrameworkStores<AppDbContext>()
+.AddJwtAuthentication(); // This adds JWT authentication middleware. Required for protected endpoints
 
 var app = builder.Build();
 
@@ -371,8 +372,7 @@ public class Role : AuthRole<Guid> { }
 public class AppDbContext : AuthDbContext<Guid, User, Role> { }
 
 // With string keys (default)
-public class User : AuthUser<Role> { }
-public class Role : AuthRole { }
+public class User : AuthUser
 public class AppDbContext : AuthDbContext<User> { }
 ```
 

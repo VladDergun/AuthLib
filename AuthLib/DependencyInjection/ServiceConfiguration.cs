@@ -44,8 +44,6 @@ namespace AuthLib.DependencyInjection
                 Options = options
             };
 
-            authDependencyBuilder.AddJwtAuthentication();
-
             return authDependencyBuilder;
         }
 
