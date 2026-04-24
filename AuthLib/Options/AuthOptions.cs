@@ -90,10 +90,6 @@ namespace AuthLib.Options
         /// </summary>
         public bool ValidateIssuerSigningKey { get; set; } = true;
         /// <summary>
-        /// The lifetime of access tokens. Default is 15 minutes.
-        /// </summary>
-        public TimeSpan AccessTokenLifetime { get; set; } = TimeSpan.FromMinutes(15);
-        /// <summary>
         /// Indicates whether the token's lifetime (exp/nbf claims) should be validated during token validation. Default is true.
         /// </summary>
         public bool ValidateLifetime { get; set; } = true;
@@ -108,6 +104,10 @@ namespace AuthLib.Options
     /// </summary>
     public sealed class TokenOptions
     {
+        /// <summary>
+        /// The lifetime of access tokens (JWT). Default is 15 minutes.
+        /// </summary>
+        public TimeSpan AccessTokenLifetime { get; set; } = TimeSpan.FromMinutes(15);
         /// <summary>
         /// The lifetime of refresh tokens. Default is 7 days.
         /// </summary>

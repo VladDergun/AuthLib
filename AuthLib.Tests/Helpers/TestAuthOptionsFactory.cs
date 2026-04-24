@@ -24,7 +24,10 @@ namespace AuthLib.Tests.Helpers
                 {
                     Issuer = "TestIssuer",
                     Audience = "TestAudience",
-                    SigningKey = "super-secret-key-for-testing-at-least-32-characters-long",
+                    SigningKey = "super-secret-key-for-testing-at-least-32-characters-long"
+                },
+                TokenOptions = new TokenOptions
+                {
                     AccessTokenLifetime = TimeSpan.FromMinutes(15),
                     RefreshTokenLifetime = TimeSpan.FromDays(7),
                     EmailVerificationTokenLifetime = TimeSpan.FromDays(1),

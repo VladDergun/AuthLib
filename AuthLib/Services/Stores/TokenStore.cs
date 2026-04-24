@@ -34,7 +34,7 @@ namespace AuthLib.Services.Stores
                 TokenHash = tokenHash,
                 IsRevoked = false,
                 TokenType = TokenType.Refresh,
-                TokenExpiry = DateTime.UtcNow.Add(_options.JWTOptions.RefreshTokenLifetime)
+                TokenExpiry = DateTime.UtcNow.Add(_options.TokenOptions.RefreshTokenLifetime)
             });
         }
 
@@ -46,7 +46,7 @@ namespace AuthLib.Services.Stores
                 TokenHash = tokenHash,
                 IsRevoked = false,
                 TokenType = TokenType.EmailVerification,
-                TokenExpiry = DateTime.UtcNow.Add(_options.JWTOptions.EmailVerificationTokenLifetime)
+                TokenExpiry = DateTime.UtcNow.Add(_options.TokenOptions.EmailVerificationTokenLifetime)
             });
         }
 
@@ -58,7 +58,7 @@ namespace AuthLib.Services.Stores
                 TokenHash = tokenHash,
                 IsRevoked = false,
                 TokenType = TokenType.PasswordReset,
-                TokenExpiry = DateTime.UtcNow.Add(_options.JWTOptions.PasswordResetTokenLifetime)
+                TokenExpiry = DateTime.UtcNow.Add(_options.TokenOptions.PasswordResetTokenLifetime)
             });
         }
 

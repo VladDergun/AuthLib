@@ -54,7 +54,7 @@ namespace AuthLib.Services
 
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            expires ??= DateTime.UtcNow.Add(jwtOptions.AccessTokenLifetime);
+            expires ??= DateTime.UtcNow.Add(_authOptions.TokenOptions.AccessTokenLifetime);
 
             var token = new JwtSecurityToken(
                 issuer: jwtOptions.Issuer,

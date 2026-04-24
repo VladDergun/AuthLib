@@ -184,6 +184,7 @@ namespace AuthLib.Tests.Services
                 PasswordSecret = "different-secret",
                 TokenSecret = options1.Value.TokenSecret,
                 JWTOptions = options1.Value.JWTOptions,
+                TokenOptions = options1.Value.TokenOptions,
                 PasswordOptions = options1.Value.PasswordOptions,
                 Roles = options1.Value.Roles
             });
@@ -211,6 +212,7 @@ namespace AuthLib.Tests.Services
                 PasswordSecret = options1.Value.PasswordSecret,
                 TokenSecret = "different-token-secret",
                 JWTOptions = options1.Value.JWTOptions,
+                TokenOptions = options1.Value.TokenOptions,
                 PasswordOptions = options1.Value.PasswordOptions,
                 Roles = options1.Value.Roles
             });

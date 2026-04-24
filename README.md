@@ -97,9 +97,14 @@ builder.Services.AddAuthServices(new AuthOptions
     {
         Issuer = "YourApp",
         Audience = "YourAppUsers",
-        SigningKey = "your-signing-key-at-least-32-characters-long",
+        SigningKey = "your-signing-key-at-least-32-characters-long"
+    },
+    TokenOptions = new TokenOptions
+    {
         AccessTokenLifetime = TimeSpan.FromMinutes(15),
-        RefreshTokenLifetime = TimeSpan.FromDays(7)
+        RefreshTokenLifetime = TimeSpan.FromDays(7),
+        EmailVerificationTokenLifetime = TimeSpan.FromDays(1),
+        PasswordResetTokenLifetime = TimeSpan.FromMinutes(30)
     },
     PasswordOptions = new PasswordOptions
     {
@@ -115,8 +120,7 @@ builder.Services.AddAuthServices(new AuthOptions
         RetentionPeriod = TimeSpan.FromDays(30)
     }
 })
-.AddEntityFrameworkStores<AppDbContext>()
-.AddJwtAuthentication(); // Enable JWT authentication for [Authorize] attribute
+.AddEntityFrameworkStores<AppDbContext>();
 
 var app = builder.Build();
 
@@ -252,6 +256,7 @@ Extended interface for custom user models.
 | `EmailVerificationRequired` | `bool` | No | Require email verification (default: `false`) |
 | `Roles` | `List<Role>` | Yes | Available roles in the system |
 | `JWTOptions` | `JWTOptions` | Yes | JWT configuration |
+| `TokenOptions` | `TokenOptions` | Yes | Token lifetimes (access, refresh, email verification, password reset) |
 | `PasswordOptions` | `PasswordOptions` | No | Password validation rules |
 | `TokenCleanupOptions` | `TokenCleanupOptions` | No | Token cleanup configuration |
 | `TwoFactorAuthOptions` | `TwoFactorAuthOptions` | No | Two-factor authentication configuration |
@@ -266,9 +271,14 @@ Extended interface for custom user models.
 | `ValidateAudience` | `bool` | true | Validate the `aud` claim against `Audience` |
 | `SigningKey` | `string` | Required | Key for signing tokens |
 | `ValidateIssuerSigningKey` | `bool` | true | Validate the token signing key |
-| `AccessTokenLifetime` | `TimeSpan` | 15 minutes | Access token expiration |
 | `ValidateLifetime` | `bool` | true | Validate token lifetime (`exp`/`nbf`) |
 | `ClockSkew` | `TimeSpan` | 5 minutes | Clock drift tolerance for lifetime validation |
+
+### TokenOptions
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `AccessTokenLifetime` | `TimeSpan` | 15 minutes | Access (JWT) token expiration |
 | `RefreshTokenLifetime` | `TimeSpan` | 7 days | Refresh token expiration |
 | `EmailVerificationTokenLifetime` | `TimeSpan` | 1 day | Email verification token expiration |
 | `PasswordResetTokenLifetime` | `TimeSpan` | 30 minutes | Password reset token expiration |
