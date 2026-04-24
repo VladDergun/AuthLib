@@ -376,6 +376,37 @@ public class User : AuthUser
 public class AppDbContext : AuthDbContext<User> { }
 ```
 
+### Customizing Error Messages
+
+All user-facing error messages returned in `Result.Errors` come from `AuthErrorDescriber`, a scoped service with a virtual property for every message. Derive from it and override only the messages you want to change (e.g. for localization, tone, or to expose stable error codes):
+
+```csharp
+using AuthLib.Services;
+
+public sealed class SpanishErrorDescriber : AuthErrorDescriber
+{
+    public override string InvalidCredentials   => "Credenciales inválidas.";
+    public override string EmailAlreadyInUse    => "El correo ya está en uso.";
+    public override string InvalidToken         => "Token inválido.";
+    public override string TokenExpired         => "El token ha expirado.";
+    public override string EmailNotVerified     => "El correo no está verificado.";
+    public override string InvalidTwoFactorCode => "Código 2FA inválido.";
+    // ...override any of: InvalidTokenReused, UserNotFound, RoleNotFound,
+    //                     TwoFactorRequired, TwoFactorNotEnabled
+}
+```
+
+Register it alongside the rest of the AuthLib pipeline:
+
+```csharp
+builder.Services.AddAuthServices(authOptions)
+    .AddEntityFrameworkStores<AppDbContext>()
+    .AddErrorDescriber<SpanishErrorDescriber>()
+    .AddJwtAuthentication();
+```
+
+`AddErrorDescriber<T>` replaces the default describer in DI, so every `AuthService` operation will surface your overridden messages. Any property you do **not** override falls back to the built-in English default.
+
 ## Security Best Practices
 
 1. **Store secrets securely** - Use environment variables or Azure Key Vault for production

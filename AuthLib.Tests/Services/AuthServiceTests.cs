@@ -44,7 +44,8 @@ namespace AuthLib.Tests.Services
                 tokenManagerService,
                 roleStore,
                 new UserStore<int, TestUser, AuthRole<int>>(_dbContext),
-                tokenStore);
+                tokenStore,
+                new AuthErrorDescriber());
 
             _authService = authService;
             _authServiceGeneric = authService;
@@ -98,7 +99,7 @@ namespace AuthLib.Tests.Services
 
             // Assert
             result.IsSuccess.Should().BeFalse();
-            result.Errors.Should().Contain(ErrorCodes.EmailAlreadyInUse);
+            result.Errors.Should().Contain(new AuthErrorDescriber().EmailAlreadyInUse);
         }
 
         [Fact]
@@ -193,7 +194,7 @@ namespace AuthLib.Tests.Services
 
             // Assert
             result.IsSuccess.Should().BeFalse();
-            result.Errors.Should().Contain(ErrorCodes.InvalidCredentials);
+            result.Errors.Should().Contain(new AuthErrorDescriber().InvalidCredentials);
         }
 
         [Fact]
@@ -204,7 +205,7 @@ namespace AuthLib.Tests.Services
 
             // Assert
             result.IsSuccess.Should().BeFalse();
-            result.Errors.Should().Contain(ErrorCodes.InvalidCredentials);
+            result.Errors.Should().Contain(new AuthErrorDescriber().InvalidCredentials);
         }
 
         [Fact]
@@ -254,7 +255,7 @@ namespace AuthLib.Tests.Services
 
             // Assert
             result.IsSuccess.Should().BeFalse();
-            result.Errors.Should().Contain(ErrorCodes.InvalidToken);
+            result.Errors.Should().Contain(new AuthErrorDescriber().InvalidToken);
         }
 
         [Fact]
@@ -274,7 +275,7 @@ namespace AuthLib.Tests.Services
 
             // Assert
             result.IsSuccess.Should().BeFalse();
-            result.Errors.Should().Contain(ErrorCodes.InvalidTokenReused);
+            result.Errors.Should().Contain(new AuthErrorDescriber().InvalidTokenReused);
 
             // Verify all tokens are revoked
             var user = await _dbContext.AuthUsers.FirstAsync(u => u.Email == email, TestContext.Current.CancellationToken);
@@ -470,7 +471,7 @@ namespace AuthLib.Tests.Services
 
             // Assert
             result.IsSuccess.Should().BeFalse();
-            result.Errors.Should().Contain(ErrorCodes.InvalidToken);
+            result.Errors.Should().Contain(new AuthErrorDescriber().InvalidToken);
         }
 
         [Fact]
@@ -516,7 +517,7 @@ namespace AuthLib.Tests.Services
             await roleManager.SeedRolesAsync(optionsWithVerification.Value.Roles, TestContext.Current.CancellationToken);
 
             var authServiceWithVerification = new AuthService<int, TestUser, AuthRole<int>>(
-                authSecurityService, _dbContext, optionsWithVerification, tokenManagerService, roleStore, userStore, tokenStore);
+                authSecurityService, _dbContext, optionsWithVerification, tokenManagerService, roleStore, userStore, tokenStore, new AuthErrorDescriber());
 
             var email = "verify@example.com";
             var password = "Password123";

@@ -1,5 +1,4 @@
-﻿using AuthLib.Common.AuthResults;
-using AuthLib.Contexts;
+﻿using AuthLib.Contexts;
 using AuthLib.Interfaces.Services;
 using AuthLib.Models;
 using AuthLib.Services.IdGenerators;

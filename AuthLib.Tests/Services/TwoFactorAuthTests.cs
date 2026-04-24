@@ -46,7 +46,8 @@ namespace AuthLib.Tests.Services
                 tokenManagerService,
                 roleStore,
                 _userStore,
-                tokenStore);
+                tokenStore,
+                new AuthErrorDescriber());
         }
 
         public async ValueTask DisposeAsync()
@@ -116,7 +117,7 @@ namespace AuthLib.Tests.Services
             var completeResult = await _authService.CompleteTwoFactorSetupAsync(user, setupResult.Value!.JWTToken, "000000", TestContext.Current.CancellationToken);
 
             completeResult.IsSuccess.Should().BeFalse();
-            completeResult.Errors.Should().Contain(ErrorCodes.InvalidTwoFactorCode);
+            completeResult.Errors.Should().Contain(new AuthErrorDescriber().InvalidTwoFactorCode);
         }
 
         [Fact]
@@ -195,7 +196,7 @@ namespace AuthLib.Tests.Services
             var verifyResult = await _authService.VerifyTwoFactorCodeAsync(loginResult.Value!.Token, "000000", TestContext.Current.CancellationToken);
 
             verifyResult.IsSuccess.Should().BeFalse();
-            verifyResult.Errors.Should().Contain(ErrorCodes.InvalidTwoFactorCode);
+            verifyResult.Errors.Should().Contain(new AuthErrorDescriber().InvalidTwoFactorCode);
         }
 
         [Fact]
@@ -243,7 +244,7 @@ namespace AuthLib.Tests.Services
             var disableResult = await _authService.DisableTwoFactorAuthAsync(user, "WrongPassword!", TestContext.Current.CancellationToken);
 
             disableResult.IsSuccess.Should().BeFalse();
-            disableResult.Errors.Should().Contain(ErrorCodes.InvalidCredentials);
+            disableResult.Errors.Should().Contain(new AuthErrorDescriber().InvalidCredentials);
         }
 
         [Fact]
@@ -271,7 +272,7 @@ namespace AuthLib.Tests.Services
             var verifyResult = await _authService.VerifyTwoFactorCodeAsync(firstToken, verifyCode, TestContext.Current.CancellationToken);
 
             verifyResult.IsSuccess.Should().BeFalse();
-            verifyResult.Errors.Should().Contain(ErrorCodes.InvalidToken);
+            verifyResult.Errors.Should().Contain(new AuthErrorDescriber().InvalidToken);
         }
 
         private static string ExtractSecretFromQrUrl(string qrUrl)
