@@ -28,6 +28,10 @@ namespace AuthLib.Options
         /// </summary>
         public required JWTOptions JWTOptions { get; set; }
         /// <summary>
+        /// Gets or sets the options used for token generation and validation.
+        /// </summary>
+        public required TokenOptions TokenOptions { get; set; }
+        /// <summary>
         /// Password validation and complexity requirements configuration.
         /// </summary>
         public PasswordOptions? PasswordOptions { get; set; }
@@ -97,6 +101,13 @@ namespace AuthLib.Options
         /// The clock skew allowance applied when validating token lifetimes to account for clock drift between servers. Default is 5 minutes.
         /// </summary>
         public TimeSpan ClockSkew { get; set; } = TimeSpan.FromMinutes(5);
+    }
+
+    /// <summary>
+    /// Options for various token types used in the authentication system, including refresh tokens, email verification tokens, and password reset tokens.
+    /// </summary>
+    public sealed class TokenOptions
+    {
         /// <summary>
         /// The lifetime of refresh tokens. Default is 7 days.
         /// </summary>

@@ -38,11 +38,15 @@ namespace AuthLib.DependencyInjection
             services.AddScoped<IAuthSecurityService, AuthSecurityService>();
             services.AddScoped<ITokenManagerService, TokenManagerService>();
 
-            return new AuthDependencyBuilder
+            var authDependencyBuilder = new AuthDependencyBuilder
             {
                 Services = services,
                 Options = options
             };
+
+            authDependencyBuilder.AddJwtAuthentication();
+
+            return authDependencyBuilder;
         }
 
         public static AuthDependencyBuilder AddEntityFrameworkStores<TDbContext>(
